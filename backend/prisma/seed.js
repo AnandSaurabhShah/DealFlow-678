@@ -11,9 +11,11 @@ const prisma = new PrismaClient({
 });
 
 async function main() {
-  const [adminPasswordHash, repPasswordHash] = await Promise.all([
+  const [adminPasswordHash, repPasswordHash, managerPasswordHash, financePasswordHash] = await Promise.all([
     bcrypt.hash(process.env.SEED_ADMIN_PASSWORD || "Admin123!", 12),
     bcrypt.hash(process.env.SEED_REP_PASSWORD || "Rep12345!", 12),
+    bcrypt.hash(process.env.SEED_MANAGER_PASSWORD || "Manager123!", 12),
+    bcrypt.hash(process.env.SEED_FINANCE_PASSWORD || "Finance123!", 12),
   ]);
 
   await prisma.user.upsert({
@@ -24,6 +26,26 @@ async function main() {
       email: "admin@dealflow360.test",
       role: "ADMIN",
       passwordHash: adminPasswordHash,
+    },
+  });
+  await prisma.user.upsert({
+    where: { email: "manager@dealflow360.test" },
+    update: { name: "Demo Sales Manager", role: "MANAGER", passwordHash: managerPasswordHash },
+    create: {
+      name: "Demo Sales Manager",
+      email: "manager@dealflow360.test",
+      role: "MANAGER",
+      passwordHash: managerPasswordHash,
+    },
+  });
+  await prisma.user.upsert({
+    where: { email: "finance@dealflow360.test" },
+    update: { name: "Demo Finance Approver", role: "FINANCE", passwordHash: financePasswordHash },
+    create: {
+      name: "Demo Finance Approver",
+      email: "finance@dealflow360.test",
+      role: "FINANCE",
+      passwordHash: financePasswordHash,
     },
   });
   await prisma.user.upsert({
@@ -88,13 +110,27 @@ async function main() {
     }),
   ]);
 
-  await prisma.discountTier.upsert({
+  const standardTier = await prisma.discountTier.upsert({
     where: { tierName: "Standard" },
-    update: { maxDiscountPercent: "5.00" },
-    create: { tierName: "Standard", maxDiscountPercent: "5.00" },
+    update: { maxDiscountPercent: "15.00" },
+    create: { tierName: "Standard", maxDiscountPercent: "15.00" },
+  });
+  await prisma.categoryDiscountOverride.upsert({
+    where: {
+      discountTierId_category: {
+        discountTierId: standardTier.id,
+        category: "Service",
+      },
+    },
+    update: { maxDiscountPercent: "10.00" },
+    create: {
+      discountTierId: standardTier.id,
+      category: "Service",
+      maxDiscountPercent: "10.00",
+    },
   });
 
-  console.log("Seeded demo users, products, price list, warehouse stock, and discount tier");
+  console.log("Seeded demo users, products, price list, warehouse stock, and discount rules");
 }
 
 async function findOrCreateProduct(data) {

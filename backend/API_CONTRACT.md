@@ -1,6 +1,6 @@
-# DealFlow360 API Contract — MVP 1
+# DealFlow360 API Contract — MVP 2
 
-This contract is frozen for the MVP 1 frontend and matches the implemented BE-Phases 2–4 routes.
+This contract covers the implemented MVP 1 API and MVP 2 backend Phases 1–2.
 
 ## Conventions
 
@@ -8,6 +8,7 @@ This contract is frozen for the MVP 1 frontend and matches the implemented BE-Ph
 - Authenticated requests use `Authorization: Bearer <token>`.
 - JSON request header: `Content-Type: application/json`.
 - Roles are `ADMIN`, `REP`, `MANAGER`, or `FINANCE`. Public signup accepts `REP`, `MANAGER`, or `FINANCE` in either upper- or lowercase; admins are system-provisioned. Responses use uppercase roles.
+- Quotation statuses are `DRAFT`, `PENDING_MANAGER_APPROVAL`, `PENDING_FINANCE_APPROVAL`, `APPROVED`, `REJECTED`, and `CONFIRMED`.
 - Prisma `Decimal` fields are serialized as JSON strings, for example `"1299"` or `"5"`.
 - Successful config endpoints wrap records in `{ "data": ... }`.
 - All errors use `{ "error": { "code": string, "message": string, "details"?: object } }`.
@@ -132,9 +133,15 @@ All quotation routes require authentication. A `REP` sees only their own quotati
 - `GET /api/quotations/:id` → `{ "data": Quotation }`
 - `POST /api/quotations`, body `{ "customerName": string }` → draft quotation; `repId` comes from the token.
 - `PUT /api/quotations/:id`, body `{ "lines": [{ "productId": string, "qty": integer, "discountPercent": decimal }] }` → replaces lines and returns server-recomputed totals.
-- `POST /api/quotations/:id/confirm` → changes `status` from `DRAFT` to `CONFIRMED`. Confirming an already-confirmed quotation is idempotent.
+- `POST /api/quotations/:id/confirm` → submits a draft through discount governance and persists `blendedRiskScore`.
 
-`PUT` replaces the full line collection, so sending a changed array handles additions, updates, and removals. `unitPrice`, `lineTotal`, and quotation totals in the request are ignored; prices are loaded from products and all totals are recomputed server-side. Each product can appear once, quantity must be a positive integer, and discount must be between 0 and 100.
+`PUT` replaces the full line collection, so sending a changed array handles additions, updates, and removals. `unitPrice`, `lineTotal`, and quotation totals in the request are ignored; prices are loaded from products and all totals are recomputed server-side. Each product can appear once, quantity must be a positive integer, and discount must be between 0 and 100. Only `DRAFT` quotations are editable.
+
+MVP 2 uses the configured tier named `Standard` as the default governance tier, falling back to the oldest tier when `Standard` does not exist. The seed configures a 15% default ceiling and a 10% `Service` override. Submission routing is:
+
+- Score `0` → `APPROVED`
+- Score greater than `0` and at most `10` → `PENDING_MANAGER_APPROVAL`
+- Score greater than `10` → `PENDING_FINANCE_APPROVAL`, with Manager still required before Finance
 
 Quotation responses include `lines` and use this shape:
 
@@ -147,12 +154,65 @@ Quotation responses include `lines` and use this shape:
   "subtotal": "2598.00",
   "totalDiscount": "259.80",
   "grandTotal": "2338.20",
+  "blendedRiskScore": "8",
   "rep": { "id": "<uuid>", "name": "Asha Rao", "email": "asha@example.com", "role": "REP" },
   "lines": [{ "id": "<uuid>", "quotationId": "<uuid>", "productId": "<uuid>", "qty": 2, "unitPrice": "1299.00", "discountPercent": "10", "lineTotal": "2338.20", "product": { "...": "Product fields" } }],
   "createdAt": "<iso-date>",
   "updatedAt": "<iso-date>"
 }
 ```
+
+## Approvals
+
+All approval endpoints require authentication. Action endpoints allow `MANAGER` and `FINANCE` at the route level, then verify that the quotation is currently awaiting that exact role.
+
+### `GET /api/quotations/pending`
+
+Returns `200 { "data": Quotation[] }`. Managers receive manager-first work, including high-risk quotes that will subsequently need Finance. Finance receives high-risk quotes only after Manager approval. Other roles receive `403 FORBIDDEN`.
+
+### `POST /api/quotations/:id/approve`
+
+No request body is required. Manager approval moves a moderate-risk quotation to `APPROVED`; high-risk quotations remain `PENDING_FINANCE_APPROVAL` and become available to Finance. Finance approval moves the quotation to `APPROVED`.
+
+`200` response: `{ "data": Quotation }`.
+
+### `POST /api/quotations/:id/reject`
+
+Request: `{ "reason": "Discount is not commercially viable" }`.
+
+Moves the quotation to `REJECTED` and returns `200 { "data": Quotation }`.
+
+### `POST /api/quotations/:id/return`
+
+Request: `{ "reason": "Please revise the service discount" }`.
+
+Moves the quotation back to `DRAFT`, resets its current risk score to zero, and returns `200 { "data": Quotation }`.
+
+Every approve, reject, and return action writes an `ApprovalLog` containing `quotationId`, `actorId`, `action`, optional `reason`, and `createdAt`.
+
+### `GET /api/quotations/:id/history`
+
+Returns the quotation's approval log oldest-to-newest. Reps can read their own quotation history; Admin, Manager, and Finance can read any quotation history.
+
+`200` response:
+
+```json
+{
+  "data": [
+    {
+      "id": "<uuid>",
+      "quotationId": "<uuid>",
+      "actorId": "<uuid>",
+      "action": "APPROVED",
+      "reason": null,
+      "createdAt": "<iso-date>",
+      "actor": { "id": "<uuid>", "name": "Demo Sales Manager", "role": "MANAGER" }
+    }
+  ]
+}
+```
+
+An unknown quotation returns `404 NOT_FOUND`; a rep requesting another rep's history receives `403 FORBIDDEN`.
 
 ## Shared error statuses
 
@@ -161,6 +221,7 @@ Quotation responses include `lines` and use this shape:
 - `403 FORBIDDEN`
 - `404 NOT_FOUND`
 - `409 CONFLICT` or `EMAIL_IN_USE`
-- `409 QUOTATION_CONFIRMED`
+- `409 QUOTATION_NOT_EDITABLE` or `INVALID_QUOTATION_STATUS`
+- `409 DISCOUNT_TIER_REQUIRED`
 - `400 EMPTY_QUOTATION`
 - `500 INTERNAL_ERROR`

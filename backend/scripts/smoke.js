@@ -13,6 +13,10 @@ function expect(condition, message) {
   if (!condition) throw new Error(message);
 }
 
+function nearlyEqual(actual, expected) {
+  return Math.abs(Number(actual) - expected) < 0.001;
+}
+
 async function login(email, password) {
   const response = await request("/api/auth/login", {
     method: "POST",
@@ -149,9 +153,9 @@ async function main() {
   const expectedSubtotal = Number(quoteProducts[0].price) * 2 + Number(quoteProducts[1].price);
   const expectedDiscount = Number(quoteProducts[0].price) * 2 * 0.1 + Number(quoteProducts[1].price) * 0.05;
   expect(
-    Number(updatedQuotation.body.data.subtotal) === expectedSubtotal &&
-      Number(updatedQuotation.body.data.totalDiscount) === expectedDiscount &&
-      Number(updatedQuotation.body.data.grandTotal) === expectedSubtotal - expectedDiscount,
+    nearlyEqual(updatedQuotation.body.data.subtotal, expectedSubtotal) &&
+      nearlyEqual(updatedQuotation.body.data.totalDiscount, expectedDiscount) &&
+      nearlyEqual(updatedQuotation.body.data.grandTotal, expectedSubtotal - expectedDiscount),
     "Server quotation totals are incorrect",
   );
 
@@ -159,16 +163,16 @@ async function main() {
     method: "POST",
     headers: { authorization: `Bearer ${repToken}` },
   });
-  expect(confirmed.status === 200 && confirmed.body.data.status === "CONFIRMED", "Confirmation failed");
+  expect(confirmed.status === 200 && confirmed.body.data.status === "APPROVED", "Submission failed");
 
   const editConfirmed = await request(`/api/quotations/${quotation.body.data.id}`, {
     method: "PUT",
     headers: { authorization: `Bearer ${repToken}` },
     body: JSON.stringify({ lines: [] }),
   });
-  expect(editConfirmed.status === 409, "Confirmed quotation remained editable");
+  expect(editConfirmed.status === 409, "Submitted quotation remained editable");
 
-  console.log("Smoke checks passed: BE-Phases 0–4, including server-owned totals and confirmation");
+  console.log("Smoke checks passed: MVP 1 flow, including server-owned totals and direct approval");
 }
 
 main().catch((error) => {

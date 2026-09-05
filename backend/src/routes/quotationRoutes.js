@@ -7,9 +7,30 @@ const router = express.Router();
 
 router.use(authenticate);
 router.get("/", asyncHandler(controller.listQuotations));
+router.get(
+  "/pending",
+  authorize("MANAGER", "FINANCE"),
+  asyncHandler(controller.listPendingApprovals),
+);
+router.get("/:id/history", asyncHandler(controller.getQuotationHistory));
 router.get("/:id", asyncHandler(controller.getQuotation));
 router.post("/", authorize("REP"), asyncHandler(controller.createQuotation));
 router.put("/:id", authorize("REP", "ADMIN"), asyncHandler(controller.replaceQuotationLines));
 router.post("/:id/confirm", authorize("REP", "ADMIN"), asyncHandler(controller.confirmQuotation));
+router.post(
+  "/:id/approve",
+  authorize("MANAGER", "FINANCE"),
+  asyncHandler(controller.approveQuotation),
+);
+router.post(
+  "/:id/reject",
+  authorize("MANAGER", "FINANCE"),
+  asyncHandler(controller.rejectQuotation),
+);
+router.post(
+  "/:id/return",
+  authorize("MANAGER", "FINANCE"),
+  asyncHandler(controller.returnQuotation),
+);
 
 module.exports = router;
