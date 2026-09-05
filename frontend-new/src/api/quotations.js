@@ -53,4 +53,17 @@ export const quotationApi = {
     const { data } = await apiClient.get(`/api/quotations/${id}/fulfillment/backorder-check`)
     return data.data
   },
+  async sendToCustomer(id, customerId) {
+    const body = customerId ? { customerId } : {}
+    const { data } = await apiClient.post(`/api/quotations/${id}/send-to-customer`, body)
+    return data.data
+  },
+  async negotiationThread(id) {
+    const { data } = await apiClient.get(`/api/quotations/${id}/comments`)
+    return data.data
+  },
+  async addNegotiationComment(id, body) {
+    const { data } = await apiClient.post(`/api/quotations/${id}/comments`, body)
+    return data.data
+  },
 }

@@ -4,8 +4,9 @@ import ApprovalChain from '../components/ApprovalChain'
 import ApprovalDecisionDialog from '../components/ApprovalDecisionDialog'
 import ApprovalHistory from '../components/ApprovalHistory'
 import Icon from '../components/Icon'
+import NegotiationThread from '../components/NegotiationThread'
 import StatusBadge from '../components/StatusBadge'
-import { useApprovalHistory, useApproveQuotation, usePendingApprovals, useQuotation, useRejectQuotation, useReturnQuotation } from '../hooks/useApiQueries'
+import { useApprovalHistory, useApproveQuotation, useInternalNegotiationComment, useNegotiationThread, usePendingApprovals, useQuotation, useRejectQuotation, useReturnQuotation } from '../hooks/useApiQueries'
 import { approvalErrorMessage, roleLabels } from '../lib/approval'
 import { formatMoney, shortId } from '../lib/format'
 import { useAuthStore } from '../store/authStore'
@@ -17,6 +18,8 @@ export default function ApprovalDetailPage() {
   const quotation = useQuotation(quotationId)
   const history = useApprovalHistory(quotationId)
   const pending = usePendingApprovals()
+  const negotiation = useNegotiationThread(quotationId, Boolean(quotation.data?.sentToCustomerAt))
+  const negotiationComment = useInternalNegotiationComment()
   const approve = useApproveQuotation()
   const reject = useRejectQuotation()
   const returnForRevision = useReturnQuotation()
@@ -85,6 +88,12 @@ export default function ApprovalDetailPage() {
         </div> : !pending.isLoading && <p className="rounded-lg bg-slate-50 p-4 text-xs leading-relaxed text-slate-500">No approval action is assigned to you for this quotation.</p>}
       </Card>
     </div>
+
+    {quote.sentToCustomerAt && <Card title="Customer conversation" eyebrow="SHARED NEGOTIATION THREAD">
+      {negotiation.isLoading ? <div className="h-40 animate-pulse rounded-lg bg-slate-100" /> : negotiation.isError ? <p role="alert" className="text-xs text-red-600">{approvalErrorMessage(negotiation.error, 'Unable to load customer comments')}</p> : <NegotiationThread comments={negotiation.data.comments} lines={quote.lines} currentAuthorType="INTERNAL" disabled={user.role === 'FINANCE'} isSubmitting={negotiationComment.isPending} onSubmit={(body, done) => negotiationComment.mutate({ id: quote.id, ...body }, { onSuccess: done })} />}
+      {negotiationComment.isError && <p role="alert" className="mt-3 rounded-lg bg-red-50 p-3 text-xs text-red-700">{approvalErrorMessage(negotiationComment.error, 'Unable to send comment')}</p>}
+      {user.role === 'FINANCE' && <p className="mt-3 text-[10px] text-slate-400">Finance access is read-only for customer conversations.</p>}
+    </Card>}
 
     {dialog && <ApprovalDecisionDialog action={dialog} isSubmitting={reject.isPending || returnForRevision.isPending} onClose={() => setDialog(null)} onSubmit={submitReason} />}
   </div>

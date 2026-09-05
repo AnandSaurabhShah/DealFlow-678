@@ -5,8 +5,8 @@ import QuoteTable from '../components/QuoteTable'
 import { useQuotations } from '../hooks/useApiQueries'
 import { useAuthStore } from '../store/authStore'
 
-const filters = ['ALL', 'DRAFT', 'PENDING_MANAGER_APPROVAL', 'PENDING_FINANCE_APPROVAL', 'APPROVED', 'FULFILLED', 'REJECTED', 'CONFIRMED']
-const filterLabels = { ALL: 'All', DRAFT: 'Draft', PENDING_MANAGER_APPROVAL: 'Pending Manager', PENDING_FINANCE_APPROVAL: 'Pending Finance', APPROVED: 'Approved', FULFILLED: 'Fulfilled', REJECTED: 'Rejected', CONFIRMED: 'Confirmed' }
+const filters = ['ALL', 'DRAFT', 'PENDING_MANAGER_APPROVAL', 'PENDING_FINANCE_APPROVAL', 'APPROVED', 'SENT_TO_CUSTOMER', 'UNDER_NEGOTIATION', 'FULFILLED', 'REJECTED', 'CONFIRMED']
+const filterLabels = { ALL: 'All', DRAFT: 'Draft', PENDING_MANAGER_APPROVAL: 'Pending Manager', PENDING_FINANCE_APPROVAL: 'Pending Finance', APPROVED: 'Approved', SENT_TO_CUSTOMER: 'Sent to Customer', UNDER_NEGOTIATION: 'Under Negotiation', FULFILLED: 'Fulfilled', REJECTED: 'Rejected', CONFIRMED: 'Confirmed' }
 
 export default function QuotationsPage({ fulfillmentOnly = false, billingOnly = false }) {
   const [filter, setFilter] = useState('ALL')
@@ -23,6 +23,7 @@ export default function QuotationsPage({ fulfillmentOnly = false, billingOnly = 
     else if (fulfillmentOnly) navigate(`/quotations/${quote.id}/fulfillment`)
     else if (user.role === 'REP' && quote.status === 'DRAFT') navigate(`/quotations/${quote.id}`)
     else if (['REP', 'ADMIN'].includes(user.role) && quote.status === 'FULFILLED') navigate(`/quotations/${quote.id}/fulfillment`)
+    else if (['REP', 'MANAGER', 'ADMIN'].includes(user.role) && ['APPROVED', 'SENT_TO_CUSTOMER', 'UNDER_NEGOTIATION'].includes(quote.status)) navigate(`/quotations/${quote.id}/negotiation`)
     else navigate(`/approvals/${quote.id}`)
   }
 
