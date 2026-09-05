@@ -11,6 +11,10 @@ async function create(path, body) {
 }
 
 export const configApi = {
+  getOptions: async () => {
+    const { data } = await apiClient.get('/api/config-options')
+    return data.data
+  },
   listProducts: params => list('/api/products', params),
   createProduct: body => create('/api/products', body),
   listPriceLists: params => list('/api/pricelists', params),

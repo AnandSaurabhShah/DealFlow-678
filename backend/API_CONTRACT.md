@@ -12,6 +12,8 @@ This contract covers the implemented MVP 1–4 APIs and MVP 5 customer-negotiati
 - Internal JWTs contain `type: "internal"`; customer JWTs contain `type: "customer"` and `customerId`. The token types are not interchangeable.
 - Prisma `Decimal` fields are serialized as JSON strings, for example `"1299"` or `"5"`.
 - Billing types are `ONE_TIME` and `RECURRING`; MVP 4 supports the `MONTHLY` recurring cycle only.
+- Product categories are `HARDWARE`, `SERVICE`, `SOFTWARE`, and `FULFILLMENT_DEMO`.
+- Product units are `UNIT`, `SERVICE`, and `SEAT_PER_MONTH`. Customer tiers are `STANDARD`, `SILVER`, and `GOLD`; the supported currency is `USD`.
 - Successful config endpoints wrap records in `{ "data": ... }`.
 - All errors use `{ "error": { "code": string, "message": string, "details"?: object } }`.
 
@@ -92,6 +94,10 @@ Requires any authenticated role. `200` response:
 
 Every endpoint in this section requires authentication. Mutating endpoints and all non-product configuration reads require `ADMIN`; authenticated product reads are also available to reps for the quotation builder. Missing/invalid tokens return `401 UNAUTHENTICATED`, and insufficient roles return `403 FORBIDDEN`.
 
+### `GET /api/config-options`
+
+Returns the canonical values and display labels for configuration forms to any authenticated user. The response is `{ "data": { productCategories, productUnits, customerTiers, currencies, billingTypes, billingCycles } }`; every collection contains `{ "value", "label" }` objects.
+
 ### Products
 
 - `GET /api/products?page=1&pageSize=20` → paginated `Product[]` (any authenticated role)
@@ -101,7 +107,7 @@ Every endpoint in this section requires authentication. Mutating endpoints and a
 Create body:
 
 ```json
-{ "name": "ProBook 14", "category": "Hardware", "price": "1299.00", "unit": "unit", "tax": "18.00", "description": "Optional", "billingType": "ONE_TIME" }
+{ "name": "ProBook 14", "category": "HARDWARE", "price": "1299.00", "unit": "UNIT", "tax": "18.00", "description": "Optional", "billingType": "ONE_TIME" }
 ```
 
 `billingType` defaults to `ONE_TIME`. A recurring product uses `"billingType": "RECURRING"` and `"billingCycle": "MONTHLY"`; `MONTHLY` is also the default cycle when a recurring product omits it.
@@ -152,7 +158,7 @@ Create body:
 {
   "tierName": "Gold",
   "maxDiscountPercent": "15.00",
-  "categoryOverrides": [{ "category": "Service", "maxDiscountPercent": "10.00" }]
+  "categoryOverrides": [{ "category": "SERVICE", "maxDiscountPercent": "10.00" }]
 }
 ```
 
@@ -170,7 +176,7 @@ All quotation routes require authentication. A `REP` sees only their own quotati
 
 `PUT` replaces the full line collection, so sending a changed array handles additions, updates, and removals. `unitPrice`, `lineTotal`, and quotation totals in the request are ignored; prices are loaded from products and all totals are recomputed server-side. Each product can appear once, quantity must be a positive integer, and discount must be between 0 and 100. Only `DRAFT` quotations are editable.
 
-MVP 2 uses the configured tier named `Standard` as the default governance tier, falling back to the oldest tier when `Standard` does not exist. The seed configures a 15% default ceiling and a 10% `Service` override. Submission routing is:
+MVP 2 uses the configured tier named `Standard` as the default governance tier, falling back to the oldest tier when `Standard` does not exist. The seed configures a 15% default ceiling and a 10% `SERVICE` override. Submission routing is:
 
 - Score `0` → `APPROVED`
 - Score greater than `0` and at most `10` → `PENDING_MANAGER_APPROVAL`

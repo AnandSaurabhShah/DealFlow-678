@@ -45,6 +45,29 @@ enum BillingCycle {
   MONTHLY
 }
 
+enum ProductCategory {
+  HARDWARE
+  SERVICE
+  SOFTWARE
+  FULFILLMENT_DEMO
+}
+
+enum ProductUnit {
+  UNIT
+  SERVICE
+  SEAT_PER_MONTH
+}
+
+enum CustomerTier {
+  STANDARD
+  SILVER
+  GOLD
+}
+
+enum Currency {
+  USD
+}
+
 enum ScheduleEntryStatus {
   PENDING
   BILLED
@@ -86,9 +109,9 @@ model Customer {
 model Product {
   id                String             @id @default(uuid())
   name              String
-  category          String
+  category          ProductCategory
   price             Decimal
-  unit              String
+  unit              ProductUnit
   tax               Decimal            @default(0)
   description       String?
   billingType       BillingType        @default(ONE_TIME)
@@ -100,11 +123,11 @@ model Product {
 }
 
 model PriceList {
-  id           String   @id @default(uuid())
+  id           String       @id @default(uuid())
   name         String
-  customerTier String
-  currency     String   @default("USD")
-  createdAt    DateTime @default(now())
+  customerTier CustomerTier
+  currency     Currency     @default(USD)
+  createdAt    DateTime     @default(now())
 }
 
 model Warehouse {
@@ -136,11 +159,11 @@ model DiscountTier {
 }
 
 model CategoryDiscountOverride {
-  id                 String       @id @default(uuid())
+  id                 String          @id @default(uuid())
   discountTierId     String
-  category           String
+  category           ProductCategory
   maxDiscountPercent Decimal
-  discountTier       DiscountTier @relation(fields: [discountTierId], references: [id])
+  discountTier       DiscountTier    @relation(fields: [discountTierId], references: [id])
 
   @@unique([discountTierId, category])
 }

@@ -44,7 +44,7 @@ async function main() {
   const forbidden = await request("/api/products", {
     method: "POST",
     headers: { authorization: `Bearer ${repToken}` },
-    body: JSON.stringify({ name: "Forbidden", category: "Hardware", price: "1", unit: "unit" }),
+    body: JSON.stringify({ name: "Forbidden", category: "HARDWARE", price: "1", unit: "UNIT" }),
   });
   expect(forbidden.status === 403, "Admin mutation did not return 403 for REP");
 
@@ -63,9 +63,9 @@ async function main() {
     headers: authHeaders,
     body: JSON.stringify({
       name: `Smoke Test Product ${Date.now()}`,
-      category: "Hardware",
+      category: "HARDWARE",
       price: "49.99",
-      unit: "unit",
+      unit: "UNIT",
       tax: "18",
     }),
   });
@@ -79,7 +79,7 @@ async function main() {
   const priceList = await request("/api/pricelists", {
     method: "POST",
     headers: authHeaders,
-    body: JSON.stringify({ name: `Smoke USD ${Date.now()}`, customerTier: "SMOKE", currency: "usd" }),
+    body: JSON.stringify({ name: `Smoke USD ${Date.now()}`, customerTier: "GOLD", currency: "USD" }),
   });
   expect(priceList.status === 201 && priceList.body.data.currency === "USD", "Price list creation failed");
 
@@ -100,7 +100,7 @@ async function main() {
     body: JSON.stringify({
       tierName: `Smoke ${Date.now()}`,
       maxDiscountPercent: "12.5",
-      categoryOverrides: [{ category: "Service", maxDiscountPercent: "8" }],
+      categoryOverrides: [{ category: "SERVICE", maxDiscountPercent: "8" }],
     }),
   });
   expect(

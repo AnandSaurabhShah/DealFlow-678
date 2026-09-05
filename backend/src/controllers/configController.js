@@ -1,7 +1,11 @@
 const prisma = require("../config/prisma");
-const ApiError = require("../utils/apiError");
 const { requireFields, decimalString, integer } = require("../utils/validation");
 const { parsePagination, paginationMeta } = require("../utils/pagination");
+const { enumValue, publicConfigOptions } = require("../constants/configEnums");
+
+async function getConfigOptions(_req, res) {
+  res.json({ data: publicConfigOptions() });
+}
 
 async function paginatedList(req, res, model, options = {}) {
   const pagination = parsePagination(req.query);
@@ -28,26 +32,16 @@ async function getProduct(req, res) {
 
 async function createProduct(req, res) {
   requireFields(req.body, ["name", "category", "price", "unit"]);
-  const billingType = String(req.body.billingType || "ONE_TIME").toUpperCase();
-  if (!["ONE_TIME", "RECURRING"].includes(billingType)) {
-    throw new ApiError(
-      400,
-      "VALIDATION_ERROR",
-      "billingType must be ONE_TIME or RECURRING",
-    );
-  }
+  const billingType = enumValue(req.body.billingType || "ONE_TIME", "billingType", "billingTypes");
   const billingCycle = billingType === "RECURRING"
-    ? String(req.body.billingCycle || "MONTHLY").toUpperCase()
+    ? enumValue(req.body.billingCycle || "MONTHLY", "billingCycle", "billingCycles")
     : null;
-  if (billingCycle && billingCycle !== "MONTHLY") {
-    throw new ApiError(400, "VALIDATION_ERROR", "Only MONTHLY billing is supported");
-  }
   const product = await prisma.product.create({
     data: {
       name: String(req.body.name).trim(),
-      category: String(req.body.category).trim(),
+      category: enumValue(req.body.category, "category", "productCategories"),
       price: decimalString(req.body.price, "price", { min: 0 }),
-      unit: String(req.body.unit).trim(),
+      unit: enumValue(req.body.unit, "unit", "productUnits"),
       tax: decimalString(req.body.tax ?? 0, "tax", { min: 0 }),
       description: req.body.description == null ? null : String(req.body.description).trim(),
       billingType,
@@ -70,8 +64,8 @@ async function createPriceList(req, res) {
   const priceList = await prisma.priceList.create({
     data: {
       name: String(req.body.name).trim(),
-      customerTier: String(req.body.customerTier).trim(),
-      currency: String(req.body.currency || "USD").trim().toUpperCase(),
+      customerTier: enumValue(req.body.customerTier, "customerTier", "customerTiers"),
+      currency: enumValue(req.body.currency || "USD", "currency", "currencies"),
     },
   });
   res.status(201).json({ data: priceList });
@@ -180,7 +174,11 @@ async function createDiscountTier(req, res) {
         create: overrides.map((override, index) => {
           requireFields(override, ["category", "maxDiscountPercent"]);
           return {
-            category: String(override.category).trim(),
+            category: enumValue(
+              override.category,
+              `categoryOverrides[${index}].category`,
+              "productCategories",
+            ),
             maxDiscountPercent: decimalString(
               override.maxDiscountPercent,
               `categoryOverrides[${index}].maxDiscountPercent`,
@@ -196,6 +194,7 @@ async function createDiscountTier(req, res) {
 }
 
 module.exports = {
+  getConfigOptions,
   listProducts,
   getProduct,
   createProduct,

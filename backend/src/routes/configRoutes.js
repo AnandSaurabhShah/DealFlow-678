@@ -7,6 +7,8 @@ const router = express.Router();
 
 router.use(authenticate);
 
+router.get("/config-options", asyncHandler(controller.getConfigOptions));
+
 // Reps need authenticated catalog reads for the Phase 4 quotation builder.
 router.get("/products", asyncHandler(controller.listProducts));
 router.get("/products/:id", asyncHandler(controller.getProduct));

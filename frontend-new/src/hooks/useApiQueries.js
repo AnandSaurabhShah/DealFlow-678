@@ -12,6 +12,14 @@ export function useProducts({ page = 1, pageSize = 20 } = {}) {
   })
 }
 
+export function useConfigOptions() {
+  return useQuery({
+    queryKey: ['configOptions'],
+    queryFn: configApi.getOptions,
+    staleTime: Infinity,
+  })
+}
+
 export function useQuotations({ page = 1, pageSize = 20, status } = {}) {
   const userId = useAuthStore(state => state.user?.id)
   return useQuery({

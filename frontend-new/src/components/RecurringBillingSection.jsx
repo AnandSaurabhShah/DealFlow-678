@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { formatDateOnly, formatMoney } from '../lib/format'
+import { configEnumLabel } from '../lib/configEnums'
 import Icon from './Icon'
 import StatusBadge from './StatusBadge'
 
@@ -41,7 +42,7 @@ function RecurringLineCard({ line, quantityChange, cancellation }) {
 
   return <article className="overflow-hidden rounded-xl border border-slate-200">
     <div className="flex flex-wrap items-start justify-between gap-4 p-4 sm:p-5">
-      <div><div className="flex flex-wrap items-center gap-2"><h4 className="font-display text-sm font-bold">{line.product?.name || 'Subscription'}</h4><span className="rounded-full bg-cyan-50 px-2 py-1 text-[9px] font-semibold text-cyan-700">{line.billingCycle || 'MONTHLY'}</span>{cancelled && <StatusBadge value="CANCELLED" />}</div><p className="mt-1 text-[10px] text-slate-400">{formatMoney(Number(line.unitPrice))} per {line.product?.unit || 'unit'} · Current cycle {formatMoney(Number(line.lineTotal))}</p></div>
+      <div><div className="flex flex-wrap items-center gap-2"><h4 className="font-display text-sm font-bold">{line.product?.name || 'Subscription'}</h4><span className="rounded-full bg-cyan-50 px-2 py-1 text-[9px] font-semibold text-cyan-700">{line.billingCycle || 'MONTHLY'}</span>{cancelled && <StatusBadge value="CANCELLED" />}</div><p className="mt-1 text-[10px] text-slate-400">{formatMoney(Number(line.unitPrice))} per {configEnumLabel(line.product?.unit)} · Current cycle {formatMoney(Number(line.lineTotal))}</p></div>
       {!cancelled && <form onSubmit={saveQuantity} className="flex items-end gap-2"><label className="text-[9px] font-semibold text-slate-500">QUANTITY<input aria-label={`${line.product?.name || 'Subscription'} quantity`} disabled={busy} className="mt-1 block w-20 rounded-lg border border-slate-200 px-2.5 py-2 text-xs outline-none focus:border-violet-500 disabled:bg-slate-50" type="number" min="1" step="1" value={quantity} onChange={event => setQuantity(event.target.value)} /></label><button disabled={busy || Number(quantity) === line.qty || !Number.isInteger(Number(quantity)) || Number(quantity) < 1} className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold hover:bg-slate-50 disabled:opacity-40">{quantityPending ? 'Saving…' : 'Update'}</button><button type="button" disabled={busy} onClick={requestCancellation} className="rounded-lg border border-red-200 px-3 py-2 text-xs font-semibold text-red-700 hover:bg-red-50 disabled:opacity-40">{cancellationPending ? 'Cancelling…' : 'Cancel'}</button></form>}
     </div>
 

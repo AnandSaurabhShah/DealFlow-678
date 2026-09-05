@@ -69,8 +69,8 @@ async function main() {
   ]);
 
   const catalog = await request("/api/products", { headers: auth(repToken) });
-  const hardware = catalog.body.data.find((product) => product.category === "Hardware");
-  const service = catalog.body.data.find((product) => product.category === "Service");
+  const hardware = catalog.body.data.find((product) => product.category === "HARDWARE");
+  const service = catalog.body.data.find((product) => product.category === "SERVICE");
   expect(hardware && service, "Seeded Hardware and Service products are required");
 
   const moderate = await createSubmittedQuote(

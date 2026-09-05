@@ -17,7 +17,7 @@ test("portal quotation exposes only the explicit customer-safe DTO", () => {
     updatedAt: new Date("2026-01-02T00:00:00Z"),
     lines: [{
       id: "line-1",
-      product: { id: "product-1", name: "Product", category: "Hardware", unit: "each", price: "100", description: "internal" },
+      product: { id: "product-1", name: "Product", category: "HARDWARE", unit: "UNIT", price: "100", description: "internal" },
       qty: 1,
       unitPrice: "100",
       discountPercent: "15",

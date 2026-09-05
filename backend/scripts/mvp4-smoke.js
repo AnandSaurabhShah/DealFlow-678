@@ -33,7 +33,7 @@ async function main() {
   const headers = { authorization: `Bearer ${login.body.token}` };
 
   const [oneTimeProduct, recurringProduct] = await Promise.all([
-    prisma.product.findFirst({ where: { billingType: "ONE_TIME", category: "Hardware" } }),
+    prisma.product.findFirst({ where: { billingType: "ONE_TIME", category: "HARDWARE" } }),
     prisma.product.findFirst({ where: { billingType: "RECURRING", billingCycle: "MONTHLY" } }),
   ]);
   expect(oneTimeProduct, "A seeded one-time product is required");

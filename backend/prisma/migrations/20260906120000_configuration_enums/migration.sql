@@ -1,0 +1,53 @@
+CREATE TYPE "ProductCategory" AS ENUM ('HARDWARE', 'SERVICE', 'SOFTWARE', 'FULFILLMENT_DEMO');
+CREATE TYPE "ProductUnit" AS ENUM ('UNIT', 'SERVICE', 'SEAT_PER_MONTH');
+CREATE TYPE "CustomerTier" AS ENUM ('STANDARD', 'SILVER', 'GOLD');
+CREATE TYPE "Currency" AS ENUM ('USD');
+
+ALTER TABLE "Product"
+  ALTER COLUMN "category" TYPE "ProductCategory"
+  USING (
+    CASE UPPER(TRIM("category"))
+      WHEN 'SERVICE' THEN 'SERVICE'
+      WHEN 'SOFTWARE' THEN 'SOFTWARE'
+      WHEN 'FULFILLMENT DEMO' THEN 'FULFILLMENT_DEMO'
+      WHEN 'FULFILLMENT_DEMO' THEN 'FULFILLMENT_DEMO'
+      WHEN 'DEVICES' THEN 'HARDWARE'
+      ELSE 'HARDWARE'
+    END::"ProductCategory"
+  ),
+  ALTER COLUMN "unit" TYPE "ProductUnit"
+  USING (
+    CASE UPPER(TRIM("unit"))
+      WHEN 'SERVICE' THEN 'SERVICE'
+      WHEN 'SEAT/MONTH' THEN 'SEAT_PER_MONTH'
+      WHEN 'SEAT_PER_MONTH' THEN 'SEAT_PER_MONTH'
+      ELSE 'UNIT'
+    END::"ProductUnit"
+  );
+
+ALTER TABLE "CategoryDiscountOverride"
+  ALTER COLUMN "category" TYPE "ProductCategory"
+  USING (
+    CASE UPPER(TRIM("category"))
+      WHEN 'SERVICE' THEN 'SERVICE'
+      WHEN 'SOFTWARE' THEN 'SOFTWARE'
+      WHEN 'FULFILLMENT DEMO' THEN 'FULFILLMENT_DEMO'
+      WHEN 'FULFILLMENT_DEMO' THEN 'FULFILLMENT_DEMO'
+      WHEN 'DEVICES' THEN 'HARDWARE'
+      ELSE 'HARDWARE'
+    END::"ProductCategory"
+  );
+
+ALTER TABLE "PriceList" ALTER COLUMN "currency" DROP DEFAULT;
+ALTER TABLE "PriceList"
+  ALTER COLUMN "customerTier" TYPE "CustomerTier"
+  USING (
+    CASE UPPER(TRIM("customerTier"))
+      WHEN 'SILVER' THEN 'SILVER'
+      WHEN 'GOLD' THEN 'GOLD'
+      ELSE 'STANDARD'
+    END::"CustomerTier"
+  ),
+  ALTER COLUMN "currency" TYPE "Currency"
+  USING ('USD'::"Currency");
+ALTER TABLE "PriceList" ALTER COLUMN "currency" SET DEFAULT 'USD';

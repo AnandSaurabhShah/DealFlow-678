@@ -1,4 +1,5 @@
 import { formatMoney } from '../lib/format'
+import { configEnumLabel } from '../lib/configEnums'
 import Icon from './Icon'
 import StatusBadge from './StatusBadge'
 
@@ -12,7 +13,7 @@ export default function OneTimeBillingSection({ lines, invoices, payment }) {
     {lines.length ? <div className="overflow-x-auto">
       <table className="w-full min-w-[560px] text-left text-xs">
         <thead><tr className="border-b border-slate-100 bg-slate-50/70 text-[9px] tracking-wide text-slate-400"><th className="px-5 py-3">ITEM</th><th className="px-5 py-3">QTY</th><th className="px-5 py-3">UNIT PRICE</th><th className="px-5 py-3 text-right">TOTAL</th></tr></thead>
-        <tbody>{lines.map(line => <tr key={line.id} className="border-b border-slate-100 last:border-b-0"><td className="px-5 py-4"><strong>{line.product?.name || 'Product'}</strong><p className="mt-1 text-[10px] text-slate-400">{line.product?.category}</p></td><td className="px-5 py-4">{line.qty}</td><td className="px-5 py-4">{formatMoney(Number(line.unitPrice))}</td><td className="px-5 py-4 text-right font-semibold">{formatMoney(Number(line.lineTotal))}</td></tr>)}</tbody>
+        <tbody>{lines.map(line => <tr key={line.id} className="border-b border-slate-100 last:border-b-0"><td className="px-5 py-4"><strong>{line.product?.name || 'Product'}</strong><p className="mt-1 text-[10px] text-slate-400">{configEnumLabel(line.product?.category)}</p></td><td className="px-5 py-4">{line.qty}</td><td className="px-5 py-4">{formatMoney(Number(line.unitPrice))}</td><td className="px-5 py-4 text-right font-semibold">{formatMoney(Number(line.lineTotal))}</td></tr>)}</tbody>
       </table>
     </div> : <EmptyMessage>No one-time products are included in this quotation.</EmptyMessage>}
 

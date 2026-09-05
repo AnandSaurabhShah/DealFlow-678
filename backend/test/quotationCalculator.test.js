@@ -36,11 +36,11 @@ test("returns zero totals for an empty quotation", () => {
 test("calculates the PS Gold hardware/service example using category ceilings", () => {
   const goldTier = {
     maxDiscountPercent: "15",
-    categoryOverrides: [{ category: "Service", maxDiscountPercent: "10" }],
+    categoryOverrides: [{ category: "SERVICE", maxDiscountPercent: "10" }],
   };
   const lines = [
-    { discountPercent: "15", product: { category: "Hardware" } },
-    { discountPercent: "18", product: { category: "Service" } },
+    { discountPercent: "15", product: { category: "HARDWARE" } },
+    { discountPercent: "18", product: { category: "SERVICE" } },
   ];
 
   const score = calculateBlendedRiskScore(lines, goldTier);
@@ -55,9 +55,9 @@ test("adds several mild overages into one blended risk score", () => {
   const tier = { maxDiscountPercent: "5", categoryOverrides: [] };
   const score = calculateBlendedRiskScore(
     [
-      { category: "Hardware", discountPercent: "7" },
-      { category: "Service", discountPercent: "8" },
-      { category: "Software", discountPercent: "6" },
+      { category: "HARDWARE", discountPercent: "7" },
+      { category: "SERVICE", discountPercent: "8" },
+      { category: "SOFTWARE", discountPercent: "6" },
     ],
     tier,
   );
@@ -68,10 +68,10 @@ test("adds several mild overages into one blended risk score", () => {
 test("falls back to the tier ceiling when no category override exists", () => {
   const tier = {
     maxDiscountPercent: "5",
-    categoryOverrides: [{ category: "Service", maxDiscountPercent: "10" }],
+    categoryOverrides: [{ category: "SERVICE", maxDiscountPercent: "10" }],
   };
   const score = calculateBlendedRiskScore(
-    [{ category: "Hardware", discountPercent: "7" }],
+    [{ category: "HARDWARE", discountPercent: "7" }],
     tier,
   );
 

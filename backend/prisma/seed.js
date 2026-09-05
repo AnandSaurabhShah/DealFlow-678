@@ -97,9 +97,9 @@ async function main() {
 
   const laptop = await findOrCreateProduct({
     name: "ProBook 14 Laptop",
-    category: "Hardware",
+    category: "HARDWARE",
     price: "1299.00",
-    unit: "unit",
+    unit: "UNIT",
     tax: "18.00",
     description: "Business laptop with three-year warranty",
     billingType: "ONE_TIME",
@@ -107,9 +107,9 @@ async function main() {
   });
   const setup = await findOrCreateProduct({
     name: "On-site Setup Service",
-    category: "Service",
+    category: "SERVICE",
     price: "350.00",
-    unit: "service",
+    unit: "SERVICE",
     tax: "18.00",
     description: "Installation and onboarding at the customer site",
     billingType: "ONE_TIME",
@@ -117,9 +117,9 @@ async function main() {
   });
   const subscription = await findOrCreateProduct({
     name: "DealFlow Cloud Subscription",
-    category: "Software",
+    category: "SOFTWARE",
     price: "89.00",
-    unit: "seat/month",
+    unit: "SEAT_PER_MONTH",
     tax: "18.00",
     description: "Monthly recurring DealFlow Cloud access",
     billingType: "RECURRING",
@@ -129,9 +129,9 @@ async function main() {
     where: { id: "00000000-0000-4000-8000-000000000601" },
     update: {
       name: "MVP3 Backorder Demo Unit",
-      category: "Fulfillment Demo",
+      category: "FULFILLMENT_DEMO",
       price: "100.00",
-      unit: "unit",
+      unit: "UNIT",
       tax: "0.00",
       description: "Dedicated zero-stock product for the MVP 3 restock demonstration",
       billingType: "ONE_TIME",
@@ -140,9 +140,9 @@ async function main() {
     create: {
       id: "00000000-0000-4000-8000-000000000601",
       name: "MVP3 Backorder Demo Unit",
-      category: "Fulfillment Demo",
+      category: "FULFILLMENT_DEMO",
       price: "100.00",
-      unit: "unit",
+      unit: "UNIT",
       tax: "0.00",
       description: "Dedicated zero-stock product for the MVP 3 restock demonstration",
       billingType: "ONE_TIME",
@@ -228,13 +228,13 @@ async function main() {
     where: {
       discountTierId_category: {
         discountTierId: standardTier.id,
-        category: "Service",
+        category: "SERVICE",
       },
     },
     update: { maxDiscountPercent: "10.00" },
     create: {
       discountTierId: standardTier.id,
-      category: "Service",
+      category: "SERVICE",
       maxDiscountPercent: "10.00",
     },
   });
@@ -851,9 +851,9 @@ async function seedFinalLoadData({
       name: recurring
         ? `Load Monthly Subscription ${pad(index)}`
         : `Load Business Product ${pad(index)}`,
-      category: recurring ? "Software" : index % 3 === 0 ? "Service" : "Hardware",
+      category: recurring ? "SOFTWARE" : index % 3 === 0 ? "SERVICE" : "HARDWARE",
       price: String(recurring ? 30 + index * 2 : 100 + index * 7),
-      unit: recurring ? "seat/month" : index % 3 === 0 ? "service" : "unit",
+      unit: recurring ? "SEAT_PER_MONTH" : index % 3 === 0 ? "SERVICE" : "UNIT",
       tax: index % 2 === 0 ? "18.00" : "12.00",
       description: `Deterministic final-seed product ${index}`,
       billingType: recurring ? "RECURRING" : "ONE_TIME",
@@ -886,7 +886,7 @@ async function seedFinalLoadData({
   const overrides = range.map((index) => ({
     id: loadId("7", index),
     discountTierId: loadId("6", index),
-    category: index % 2 === 0 ? "Service" : "Hardware",
+    category: index % 2 === 0 ? "SERVICE" : "HARDWARE",
     maxDiscountPercent: String(3 + (index % 15)),
   }));
 
