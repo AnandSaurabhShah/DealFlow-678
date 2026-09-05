@@ -6,6 +6,11 @@ const styles = {
   REJECTED: 'bg-red-50 text-red-700',
   CONFIRMED: 'bg-emerald-50 text-emerald-700',
   FULFILLED: 'bg-cyan-50 text-cyan-700',
+  PENDING: 'bg-amber-50 text-amber-700',
+  BILLED: 'bg-violet-50 text-violet-700',
+  CANCELLED: 'bg-slate-100 text-slate-500',
+  PAID: 'bg-emerald-50 text-emerald-700',
+  UNPAID: 'bg-amber-50 text-amber-700',
 }
 
 const statusLabels = {
@@ -16,6 +21,11 @@ const statusLabels = {
   REJECTED: 'Rejected',
   CONFIRMED: 'Confirmed',
   FULFILLED: 'Fulfilled',
+  PENDING: 'Pending',
+  BILLED: 'Billed',
+  CANCELLED: 'Cancelled',
+  PAID: 'Paid',
+  UNPAID: 'Unpaid',
 }
 
 export default function StatusBadge({ value }) {

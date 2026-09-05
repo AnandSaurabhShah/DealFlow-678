@@ -10,4 +10,8 @@ export const formatDate = value => new Intl.DateTimeFormat('en', {
   timeStyle: 'short',
 }).format(new Date(value))
 
-export const shortId = id => `Q-${id.slice(0, 8).toUpperCase()}`
+export const shortId = id => `Q-${id.slice(-8).toUpperCase()}`
+
+export const formatDateOnly = value => new Intl.DateTimeFormat('en', {
+  dateStyle: 'medium',
+}).format(new Date(value))

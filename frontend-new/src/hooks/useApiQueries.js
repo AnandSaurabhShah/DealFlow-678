@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { configApi } from '../api/config'
+import { billingApi } from '../api/billing'
 import { quotationApi } from '../api/quotations'
 import { useAuthStore } from '../store/authStore'
 
@@ -106,6 +107,60 @@ export function useConfirmFulfillment() {
       if (error.response?.data?.error?.code !== 'INVALID_QUOTATION_STATUS') return
       queryClient.invalidateQueries({ queryKey: ['quotation', variables.id] })
       queryClient.invalidateQueries({ queryKey: ['quotations'] })
+    },
+  })
+}
+
+export function useBilling(id) {
+  return useQuery({
+    queryKey: ['billing', id],
+    queryFn: () => billingApi.get(id),
+    enabled: Boolean(id),
+    staleTime: 0,
+  })
+}
+
+function useBillingMutation(mutationFn) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn,
+    onSuccess: (result, variables) => {
+      const quotationId = typeof variables === 'string' ? variables : variables.quotationId
+      if (result?.oneTimeLines && result?.recurringLines) {
+        queryClient.setQueryData(['billing', quotationId], result)
+      } else {
+        queryClient.invalidateQueries({ queryKey: ['billing', quotationId] })
+      }
+      queryClient.invalidateQueries({ queryKey: ['quotation', quotationId] })
+      queryClient.invalidateQueries({ queryKey: ['quotations'] })
+    },
+    onError: (_error, variables) => {
+      const quotationId = typeof variables === 'string' ? variables : variables.quotationId
+      queryClient.invalidateQueries({ queryKey: ['billing', quotationId] })
+    },
+  })
+}
+
+export function useGenerateBilling() {
+  return useBillingMutation(billingApi.generate)
+}
+
+export function useUpdateRecurringQuantity() {
+  return useBillingMutation(({ quotationId, lineId, qty }) => (
+    billingApi.updateQuantity(quotationId, lineId, qty)
+  ))
+}
+
+export function useCancelRecurringLine() {
+  return useBillingMutation(({ quotationId, lineId }) => billingApi.cancel(quotationId, lineId))
+}
+
+export function usePayInvoice() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ invoiceId }) => billingApi.payInvoice(invoiceId),
+    onSuccess: (_invoice, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['billing', variables.quotationId] })
     },
   })
 }
