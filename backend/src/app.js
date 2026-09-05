@@ -5,6 +5,7 @@ const env = require("./config/env");
 const authRoutes = require("./routes/authRoutes");
 const configRoutes = require("./routes/configRoutes");
 const quotationRoutes = require("./routes/quotationRoutes");
+const billingRoutes = require("./routes/billingRoutes");
 const asyncHandler = require("./utils/asyncHandler");
 const { notFound, errorHandler } = require("./middleware/errors");
 
@@ -33,6 +34,7 @@ app.get(
 );
 
 app.use("/api/auth", authRoutes);
+app.use("/api", billingRoutes);
 app.use("/api/quotations", quotationRoutes);
 app.use("/api", configRoutes);
 app.use(notFound);

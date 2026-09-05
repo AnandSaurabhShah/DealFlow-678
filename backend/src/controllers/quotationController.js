@@ -149,6 +149,8 @@ async function replaceQuotationLines(req, res) {
           unitPrice: line.unitPrice,
           discountPercent: line.discountPercent,
           lineTotal: calculateLineTotal(line).lineTotal,
+          billingType: productsById.get(line.productId).billingType,
+          billingCycle: productsById.get(line.productId).billingCycle,
         })),
       });
     }

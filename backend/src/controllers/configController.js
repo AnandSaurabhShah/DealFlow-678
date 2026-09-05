@@ -1,4 +1,5 @@
 const prisma = require("../config/prisma");
+const ApiError = require("../utils/apiError");
 const { requireFields, decimalString, integer } = require("../utils/validation");
 
 async function listProducts(_req, res) {
@@ -13,6 +14,20 @@ async function getProduct(req, res) {
 
 async function createProduct(req, res) {
   requireFields(req.body, ["name", "category", "price", "unit"]);
+  const billingType = String(req.body.billingType || "ONE_TIME").toUpperCase();
+  if (!["ONE_TIME", "RECURRING"].includes(billingType)) {
+    throw new ApiError(
+      400,
+      "VALIDATION_ERROR",
+      "billingType must be ONE_TIME or RECURRING",
+    );
+  }
+  const billingCycle = billingType === "RECURRING"
+    ? String(req.body.billingCycle || "MONTHLY").toUpperCase()
+    : null;
+  if (billingCycle && billingCycle !== "MONTHLY") {
+    throw new ApiError(400, "VALIDATION_ERROR", "Only MONTHLY billing is supported");
+  }
   const product = await prisma.product.create({
     data: {
       name: String(req.body.name).trim(),
@@ -21,6 +36,8 @@ async function createProduct(req, res) {
       unit: String(req.body.unit).trim(),
       tax: decimalString(req.body.tax ?? 0, "tax", { min: 0 }),
       description: req.body.description == null ? null : String(req.body.description).trim(),
+      billingType,
+      billingCycle,
     },
   });
   res.status(201).json({ data: product });

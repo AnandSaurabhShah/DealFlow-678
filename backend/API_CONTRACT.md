@@ -1,6 +1,6 @@
-# DealFlow360 API Contract — MVP 3
+# DealFlow360 API Contract — MVP 4
 
-This contract covers the implemented MVP 1–2 API and MVP 3 fulfillment backend.
+This contract covers the implemented MVP 1–3 API and MVP 4 hybrid-billing backend.
 
 ## Conventions
 
@@ -10,12 +10,13 @@ This contract covers the implemented MVP 1–2 API and MVP 3 fulfillment backend
 - Roles are `ADMIN`, `REP`, `MANAGER`, or `FINANCE`. Public signup accepts `REP`, `MANAGER`, or `FINANCE` in either upper- or lowercase; admins are system-provisioned. Responses use uppercase roles.
 - Quotation statuses are `DRAFT`, `PENDING_MANAGER_APPROVAL`, `PENDING_FINANCE_APPROVAL`, `APPROVED`, `REJECTED`, `CONFIRMED`, and `FULFILLED`.
 - Prisma `Decimal` fields are serialized as JSON strings, for example `"1299"` or `"5"`.
+- Billing types are `ONE_TIME` and `RECURRING`; MVP 4 supports the `MONTHLY` recurring cycle only.
 - Successful config endpoints wrap records in `{ "data": ... }`.
 - All errors use `{ "error": { "code": string, "message": string, "details"?: object } }`.
 
 Response record shapes:
 
-- `Product`: `{ id, name, category, price, unit, tax, description, createdAt }`
+- `Product`: `{ id, name, category, price, unit, tax, description, billingType, billingCycle, createdAt }`
 - `PriceList`: `{ id, name, customerTier, currency, createdAt }`
 - `Warehouse`: `{ id, name, location, createdAt, stockLevels }`
 - `StockLevel`: `{ id, warehouseId, productId, qty, product }`
@@ -83,8 +84,10 @@ Every endpoint in this section requires authentication. Mutating endpoints and a
 Create body:
 
 ```json
-{ "name": "ProBook 14", "category": "Hardware", "price": "1299.00", "unit": "unit", "tax": "18.00", "description": "Optional" }
+{ "name": "ProBook 14", "category": "Hardware", "price": "1299.00", "unit": "unit", "tax": "18.00", "description": "Optional", "billingType": "ONE_TIME" }
 ```
+
+`billingType` defaults to `ONE_TIME`. A recurring product uses `"billingType": "RECURRING"` and `"billingCycle": "MONTHLY"`; `MONTHLY` is also the default cycle when a recurring product omits it.
 
 ### Price lists
 
@@ -169,7 +172,7 @@ Quotation responses include `lines` and use this shape:
   "grandTotal": "2338.20",
   "blendedRiskScore": "8",
   "rep": { "id": "<uuid>", "name": "Asha Rao", "email": "asha@example.com", "role": "REP" },
-  "lines": [{ "id": "<uuid>", "quotationId": "<uuid>", "productId": "<uuid>", "qty": 2, "unitPrice": "1299.00", "discountPercent": "10", "lineTotal": "2338.20", "product": { "...": "Product fields" } }],
+  "lines": [{ "id": "<uuid>", "quotationId": "<uuid>", "productId": "<uuid>", "qty": 2, "unitPrice": "1299.00", "discountPercent": "10", "lineTotal": "2338.20", "billingType": "ONE_TIME", "billingCycle": null, "subscriptionStartDate": null, "product": { "...": "Product fields" } }],
   "createdAt": "<iso-date>",
   "updatedAt": "<iso-date>"
 }
@@ -312,6 +315,113 @@ Available to the quotation's owning `REP` and to `ADMIN` after fulfillment has b
 
 Calling this endpoint before the quotation reaches `FULFILLED` returns `409 INVALID_QUOTATION_STATUS`.
 
+## Hybrid billing
+
+Billing reads are available to the same authenticated users who can read a quotation. Billing mutations are restricted to the quotation's owning `REP` and `ADMIN`.
+
+Billing is generated explicitly once while the quotation is `APPROVED`, before warehouse fulfillment. After generation, recurring quantity changes and cancellation remain available when the quotation is `APPROVED` or `FULFILLED`.
+
+### `GET /api/quotations/:id/billing`
+
+Returns one-time and recurring data in separate collections so the client does not need to classify lines itself.
+The four collections are authoritative: `oneTimeLines` and `oneTimeInvoices` contain only
+`ONE_TIME` records, while `recurringLines` and `recurringInvoices` contain only `RECURRING`
+records. Schedule entries and credit notes stay nested under their recurring line.
+
+```json
+{
+  "data": {
+    "quotationId": "<uuid>",
+    "customerName": "Acme Corp",
+    "status": "APPROVED",
+    "oneTimeLines": [
+      {
+        "id": "<line-uuid>",
+        "billingType": "ONE_TIME",
+        "billingCycle": null,
+        "billingScheduleEntries": [],
+        "creditNotes": [],
+        "product": { "...": "Product fields" }
+      }
+    ],
+    "recurringLines": [
+      {
+        "id": "<line-uuid>",
+        "billingType": "RECURRING",
+        "billingCycle": "MONTHLY",
+        "subscriptionStartDate": "<iso-date>",
+        "billingScheduleEntries": [
+          { "id": "<uuid>", "quotationLineId": "<line-uuid>", "billingDate": "<iso-date>", "amount": "178", "status": "PENDING", "createdAt": "<iso-date>" }
+        ],
+        "creditNotes": [],
+        "product": { "...": "Product fields" }
+      }
+    ],
+    "oneTimeInvoices": [
+      { "id": "<uuid>", "quotationId": "<uuid>", "amount": "1299", "type": "ONE_TIME", "paid": false, "createdAt": "<iso-date>" }
+    ],
+    "recurringInvoices": []
+  }
+}
+```
+
+### `POST /api/quotations/:id/billing/generate`
+
+No body is required. Creates one aggregate `ONE_TIME` invoice for all one-time lines and four monthly schedule entries per recurring line: one immediately and three future entries. It also sets each recurring line's `subscriptionStartDate`.
+
+Returns `201` with the same billing shape as the GET endpoint. Calling it again returns `409 BILLING_ALREADY_GENERATED`. A quotation that is not currently `APPROVED` returns `409 INVALID_QUOTATION_STATUS`.
+
+### `PUT /api/quotations/:id/lines/:lineId/quantity`
+
+Request:
+
+```json
+{ "qty": 4 }
+```
+
+`qty` must be a positive integer. The endpoint updates the recurring line and future monthly amounts, recomputes quotation totals, and creates either an immediate prorated schedule entry for an increase or a credit note for a decrease.
+
+```json
+{
+  "data": {
+    "line": { "...": "updated QuotationLine fields" },
+    "proration": { "type": "SCHEDULE_ENTRY", "amount": "44.5", "signedAmount": "44.5", "daysRemainingInCycle": 15 },
+    "scheduleEntry": { "...": "created BillingScheduleEntry, or null" },
+    "creditNote": null
+  }
+}
+```
+
+Sending the existing quantity returns `type: "NONE"` without creating an adjustment. Use the cancellation endpoint instead of setting quantity to zero.
+
+### `POST /api/quotations/:id/lines/:lineId/cancel`
+
+No body is required. Sets the recurring line quantity and total to zero, marks its future pending schedule entries `CANCELLED`, recomputes quotation totals, and creates a credit note for the unused current-cycle amount when a future cycle boundary exists.
+
+```json
+{
+  "data": {
+    "line": { "...": "cancelled QuotationLine fields" },
+    "cancelledEntries": [{ "...": "BillingScheduleEntry with CANCELLED status" }],
+    "creditNote": { "id": "<uuid>", "quotationLineId": "<line-uuid>", "amount": "89", "reason": "Subscription cancelled", "createdAt": "<iso-date>" }
+  }
+}
+```
+
+### `POST /api/invoices/:id/pay`
+
+No body is required. Idempotently sets `paid` to `true` and returns `200 { "data": Invoice }`.
+
+Relevant billing errors:
+
+- `409 BILLING_ALREADY_GENERATED`
+- `409 BILLING_NOT_GENERATED`
+- `409 NO_BILLABLE_LINES`
+- `409 NOT_RECURRING`
+- `409 SUBSCRIPTION_CANCELLED`
+- `409 NO_PENDING_BILLING_CYCLE`
+- `409 UNSUPPORTED_BILLING_CYCLE`
+
 ## Shared error statuses
 
 - `400 VALIDATION_ERROR` or `INVALID_REFERENCE`
@@ -322,6 +432,8 @@ Calling this endpoint before the quotation reaches `FULFILLED` returns `409 INVA
 - `409 QUOTATION_NOT_EDITABLE` or `INVALID_QUOTATION_STATUS`
 - `409 DISCOUNT_TIER_REQUIRED`
 - `409 FULFILLMENT_OVER_ALLOCATION` or `INSUFFICIENT_STOCK`
+- `409 BILLING_ALREADY_GENERATED`, `BILLING_NOT_GENERATED`, or `NO_PENDING_BILLING_CYCLE`
+- `409 NO_BILLABLE_LINES`, `NOT_RECURRING`, `SUBSCRIPTION_CANCELLED`, or `UNSUPPORTED_BILLING_CYCLE`
 - `400 INVALID_FULFILLMENT_SPLIT`
 - `400 EMPTY_QUOTATION`
 - `500 INTERNAL_ERROR`

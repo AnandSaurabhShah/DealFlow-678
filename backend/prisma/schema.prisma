@@ -34,6 +34,21 @@ enum ApprovalAction {
   RETURNED
 }
 
+enum BillingType {
+  ONE_TIME
+  RECURRING
+}
+
+enum BillingCycle {
+  MONTHLY
+}
+
+enum ScheduleEntryStatus {
+  PENDING
+  BILLED
+  CANCELLED
+}
+
 model User {
   id           String        @id @default(uuid())
   name         String
@@ -53,6 +68,8 @@ model Product {
   unit              String
   tax               Decimal            @default(0)
   description       String?
+  billingType       BillingType        @default(ONE_TIME)
+  billingCycle      BillingCycle?
   quotationLines    QuotationLine[]
   stockLevels       StockLevel[]
   fulfillmentSplits FulfillmentSplit[]
@@ -118,20 +135,26 @@ model Quotation {
   lines             QuotationLine[]
   approvalLogs      ApprovalLog[]
   fulfillmentSplits FulfillmentSplit[]
+  invoices          Invoice[]
   createdAt         DateTime           @default(now())
   updatedAt         DateTime           @updatedAt
 }
 
 model QuotationLine {
-  id              String    @id @default(uuid())
-  quotationId     String
-  productId       String
-  qty             Int
-  unitPrice       Decimal
-  discountPercent Decimal   @default(0)
-  lineTotal       Decimal
-  quotation       Quotation @relation(fields: [quotationId], references: [id])
-  product         Product   @relation(fields: [productId], references: [id])
+  id                     String                 @id @default(uuid())
+  quotationId            String
+  productId              String
+  qty                    Int
+  unitPrice              Decimal
+  discountPercent        Decimal                @default(0)
+  lineTotal              Decimal
+  billingType            BillingType            @default(ONE_TIME)
+  billingCycle           BillingCycle?
+  subscriptionStartDate  DateTime?
+  quotation              Quotation              @relation(fields: [quotationId], references: [id])
+  product                Product                @relation(fields: [productId], references: [id])
+  billingScheduleEntries BillingScheduleEntry[]
+  creditNotes            CreditNote[]
 }
 
 model ApprovalLog {
@@ -163,4 +186,40 @@ model FulfillmentSplit {
   @@unique([quotationId, warehouseId, productId])
   @@index([warehouseId])
   @@index([productId])
+}
+
+model BillingScheduleEntry {
+  id              String              @id @default(uuid())
+  quotationLineId String
+  billingDate     DateTime
+  amount          Decimal
+  status          ScheduleEntryStatus @default(PENDING)
+  quotationLine   QuotationLine       @relation(fields: [quotationLineId], references: [id])
+  createdAt       DateTime            @default(now())
+
+  @@unique([quotationLineId, billingDate])
+  @@index([billingDate, status])
+}
+
+model Invoice {
+  id          String      @id @default(uuid())
+  quotationId String
+  amount      Decimal
+  type        BillingType
+  paid        Boolean     @default(false)
+  quotation   Quotation   @relation(fields: [quotationId], references: [id])
+  createdAt   DateTime    @default(now())
+
+  @@index([quotationId])
+}
+
+model CreditNote {
+  id              String        @id @default(uuid())
+  quotationLineId String
+  amount          Decimal
+  reason          String
+  quotationLine   QuotationLine @relation(fields: [quotationLineId], references: [id])
+  createdAt       DateTime      @default(now())
+
+  @@index([quotationLineId])
 }
