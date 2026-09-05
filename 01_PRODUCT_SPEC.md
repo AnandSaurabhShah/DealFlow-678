@@ -12,7 +12,7 @@ DealFlow360 is a **self-governing B2B Sales Operations platform**. It is not a s
 
 **Core idea:** a quotation is a *living, negotiable document* governed by business rules, not a static PDF.
 
-**Tech stack:** MERN (MongoDB, Express.js, React.js, Mongoose).
+**Tech stack:** MERN (PostGres, Express.js, React.js, Prisma).
 
 ---
 

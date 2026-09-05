@@ -1,0 +1,8 @@
+node_modules/
+/generated/prisma
+.agents/skills
+.claude/skills
+.windsurf/skills
+.env
+.env.*
+!.env.example
