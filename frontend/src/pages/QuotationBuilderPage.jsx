@@ -1,32 +1,98 @@
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useMemo, useState } from 'react'
+import { useNavigate, useParams } from 'react-router-dom'
+import { getApiError } from '../api/client'
+import { quotationApi } from '../api/quotations'
 import Icon from '../components/Icon'
-import { products } from '../data/mockData'
-import { formatMoney } from '../lib/format'
+import { useProducts, useQuotation } from '../hooks/useApiQueries'
+import { formatMoney, shortId } from '../lib/format'
 
 const inputClass = 'mt-1.5 block w-full rounded-lg border border-slate-200 bg-white p-2.5 outline-none focus:border-violet-500 focus:ring-4 focus:ring-violet-500/10'
 
-export default function QuotationBuilderPage({ onSave }) {
-  const [customer, setCustomer] = useState('Northstar Labs')
-  const [lines, setLines] = useState([{ ...products[0], qty: 10, discount: 8 }, { ...products[2], qty: 1, discount: 12 }])
-  const [selected, setSelected] = useState(1)
-  const totals = useMemo(() => {
-    const subtotal = lines.reduce((total, line) => total + line.price * line.qty, 0)
-    const discount = lines.reduce((total, line) => total + line.price * line.qty * line.discount / 100, 0)
-    return { subtotal, discount, total: subtotal - discount }
-  }, [lines])
-  const updateLine = (id, field, value) => setLines(lines.map(line => line.id === id ? { ...line, [field]: Math.max(0, Number(value)) } : line))
-  const addProduct = () => {
-    const product = products.find(item => item.id === Number(selected))
-    if (!lines.some(line => line.id === product.id)) setLines([...lines, { ...product, qty: 1, discount: 0 }])
-  }
+export default function QuotationBuilderPage() {
+  const { quotationId } = useParams()
+  const products = useProducts()
+  const quotation = useQuotation(quotationId)
 
-  return <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_330px]"><section><div className="mb-5 flex items-center justify-center text-[10px] text-slate-400"><Step number="1" label="Details" done/><i className="mx-3 h-px w-9 bg-slate-200 sm:w-16"/><Step number="2" label="Line items" active/><i className="mx-3 h-px w-9 bg-slate-200 sm:w-16"/><Step number="3" label="Review"/></div><article className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm"><div className="flex items-start justify-between p-5"><div className="flex gap-3"><span className="grid size-8 place-items-center rounded-lg bg-violet-100 text-[10px] font-bold text-violet-700">02</span><div><h2 className="font-display text-base font-bold">Build your quotation</h2><p className="mt-1 text-[10px] text-slate-400">Add products, quantities, and commercial terms.</p></div></div><span className="rounded-full bg-emerald-50 px-2 py-1 text-[9px] text-emerald-700">Draft auto-saved</span></div>
-      <div className="grid gap-4 px-5 pb-5 sm:grid-cols-[1.4fr_1fr]"><label className="text-[10px] font-semibold">Customer<input className={inputClass} value={customer} onChange={event => setCustomer(event.target.value)}/></label><label className="text-[10px] font-semibold">Valid until<input className={inputClass} type="date" defaultValue="2026-10-05"/></label></div>
-      <div className="flex flex-col justify-between gap-3 border-t border-slate-100 p-5 sm:flex-row sm:items-center"><h3 className="text-xs font-semibold">Line items <span className="rounded-full bg-violet-50 px-1.5 py-0.5 text-[9px] text-violet-700">{lines.length}</span></h3><div className="flex gap-2"><select className="max-w-[175px] rounded-lg border border-slate-200 bg-white px-2 text-[10px]" value={selected} onChange={event => setSelected(event.target.value)}>{products.map(product => <option value={product.id} key={product.id}>{product.name}</option>)}</select><button onClick={addProduct} className="flex items-center gap-1 rounded-lg border border-slate-200 px-3 py-2 text-[10px] font-semibold"><Icon name="plus"/>Add product</button></div></div>
-      <div><div className="hidden grid-cols-[minmax(190px,2fr)_55px_90px_90px_95px_20px] gap-2 border-y border-slate-100 bg-slate-50 px-5 py-2.5 text-[8px] text-slate-400 md:grid"><span>PRODUCT</span><span>QTY</span><span>UNIT PRICE</span><span>DISCOUNT</span><span>LINE TOTAL</span><span/></div>{lines.map(line => <div className="grid grid-cols-[1fr_55px_80px] items-center gap-2 border-b border-slate-100 px-5 py-3 text-[10px] md:grid-cols-[minmax(190px,2fr)_55px_90px_90px_95px_20px]" key={line.id}><div className="col-span-3 flex items-center gap-2 md:col-span-1"><span className="grid size-8 place-items-center rounded-lg bg-violet-50 text-violet-600"><Icon name="box"/></span><div className="flex flex-col"><strong>{line.name}</strong><small className="mt-0.5 text-[8px] text-slate-400">{line.category} · {line.sku}</small></div></div><input aria-label={`${line.name} quantity`} className="w-full rounded-md border border-slate-200 p-2" type="number" min="1" value={line.qty} onChange={event => updateLine(line.id, 'qty', event.target.value)}/><span>{formatMoney(line.price)}</span><label className="flex items-center rounded-md border border-slate-200 p-2"><input aria-label={`${line.name} discount`} className="w-full min-w-0 border-0 outline-none" type="number" value={line.discount} onChange={event => updateLine(line.id, 'discount', event.target.value)}/><span>%</span></label><strong>{formatMoney(line.price * line.qty * (1 - line.discount / 100))}</strong><button aria-label={`Remove ${line.name}`} onClick={() => setLines(lines.filter(item => item.id !== line.id))} className="text-lg text-slate-400 hover:text-red-500">×</button></div>)}</div>
-      <label className="m-5 block text-[10px] font-semibold">Internal notes<textarea className={`${inputClass} h-16 resize-none`} placeholder="Add context for your team or approver..."/></label></article></section>
-    <aside className="sticky top-28 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm"><div className="flex justify-between bg-ink px-5 py-4 text-white"><span className="text-[8px] tracking-widest text-violet-200/70">QUOTATION SUMMARY</span><strong className="text-[11px]">Q-1049</strong></div><div className="flex gap-3 p-5"><span className="grid size-10 place-items-center rounded-[10px] bg-violet-100 text-[11px] font-bold text-violet-700">NL</span><div className="flex flex-col"><small className="text-[8px] tracking-wider text-slate-400">PREPARED FOR</small><strong className="my-0.5 text-xs">{customer || 'Select customer'}</strong><p className="text-[9px] text-amber-600">Gold customer tier</p></div></div><div className="mx-5 space-y-2 border-y border-slate-100 py-4 text-[10px]"><SummaryLine label="Subtotal" value={formatMoney(totals.subtotal)}/><SummaryLine label="Discount" value={`−${formatMoney(totals.discount)}`} accent/><SummaryLine label="Estimated tax" value={formatMoney(totals.total * .08)}/></div><div className="grid grid-cols-[1fr_auto] p-5"><span className="text-[11px] font-semibold">Grand total</span><strong className="font-display text-xl">{formatMoney(totals.total * 1.08)}</strong><small className="col-span-2 text-right text-[8px] text-slate-400">USD · taxes included</small></div><div className="mx-5 rounded-lg border border-emerald-100 bg-emerald-50/50 p-3"><div className="flex justify-between text-[10px]"><span>Estimated margin</span><strong>36.8%</strong></div><div className="my-2 h-1 rounded-full bg-emerald-100"><span className="block h-full w-2/3 rounded-full bg-emerald-500"/></div><p className="text-[8px] text-emerald-700">● Healthy margin for this customer tier</p></div><div className="space-y-2 p-5"><button onClick={() => onSave({ customer, value: totals.total * 1.08 })} className="flex w-full items-center justify-center gap-2 rounded-lg bg-violet-600 px-4 py-3 text-xs font-semibold text-white shadow-lg shadow-violet-600/20">Save & continue<Icon name="arrow"/></button><button className="w-full rounded-lg border border-slate-200 px-4 py-2.5 text-xs font-semibold">Save as draft</button></div><p className="px-5 pb-5 text-center text-[8px] text-slate-400">◈ Totals will be revalidated by the server after API integration.</p></aside></div>
+  if (products.isLoading || (quotationId && quotation.isLoading)) return <PanelMessage>Loading quotation builder…</PanelMessage>
+  if (products.isError) return <PanelMessage error>{getApiError(products.error, 'Unable to load products')}</PanelMessage>
+  if (quotation.isError) return <PanelMessage error>{getApiError(quotation.error, 'Unable to load quotation')}</PanelMessage>
+
+  return <BuilderForm initialQuotation={quotation.data} products={products.data || []} />
 }
 
-function Step({ number, label, done, active }) { return <div className="flex items-center gap-1.5"><span className={`grid size-6 place-items-center rounded-full border text-[9px] ${done ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : active ? 'border-violet-600 bg-violet-600 text-white' : 'border-slate-200'}`}>{number}</span><b className="hidden sm:block">{label}</b></div> }
-function SummaryLine({ label, value, accent }) { return <div className="flex justify-between"><span className="text-slate-400">{label}</span><strong className={accent ? 'text-coral' : ''}>{value}</strong></div> }
+function BuilderForm({ initialQuotation, products }) {
+  const queryClient = useQueryClient()
+  const navigate = useNavigate()
+  const [draftId, setDraftId] = useState(initialQuotation?.id || null)
+  const [customerName, setCustomerName] = useState(initialQuotation?.customerName || '')
+  const [selectedProductId, setSelectedProductId] = useState(products[0]?.id || '')
+  const [lines, setLines] = useState(() => (initialQuotation?.lines || []).map(line => ({
+    productId: line.productId,
+    name: line.product.name,
+    category: line.product.category,
+    unitPrice: Number(line.unitPrice),
+    qty: line.qty,
+    discountPercent: Number(line.discountPercent),
+  })))
+  const [notice, setNotice] = useState('')
+
+  const totals = useMemo(() => lines.reduce((sum, line) => {
+    const gross = line.unitPrice * line.qty
+    const discount = gross * line.discountPercent / 100
+    return { subtotal: sum.subtotal + gross, totalDiscount: sum.totalDiscount + discount, grandTotal: sum.grandTotal + gross - discount }
+  }, { subtotal: 0, totalDiscount: 0, grandTotal: 0 }), [lines])
+
+  const saveMutation = useMutation({
+    mutationFn: async ({ shouldConfirm }) => {
+      if (!customerName.trim()) throw new Error('Customer name is required')
+      if (shouldConfirm && lines.length === 0) throw new Error('Add at least one product before confirming')
+      const draft = draftId
+        ? { id: draftId }
+        : await quotationApi.create({ customerName: customerName.trim() })
+      const saved = await quotationApi.replaceLines(draft.id, lines.map(line => ({
+        productId: line.productId,
+        qty: line.qty,
+        discountPercent: line.discountPercent,
+      })))
+      return shouldConfirm ? quotationApi.confirm(saved.id) : saved
+    },
+    onSuccess: (saved, variables) => {
+      setDraftId(saved.id)
+      setCustomerName(saved.customerName)
+      setLines(saved.lines.map(line => ({ productId: line.productId, name: line.product.name, category: line.product.category, unitPrice: Number(line.unitPrice), qty: line.qty, discountPercent: Number(line.discountPercent) })))
+      queryClient.setQueryData(['quotation', saved.id], saved)
+      queryClient.invalidateQueries({ queryKey: ['quotations'] })
+      if (variables.shouldConfirm) navigate('/quotations')
+      else setNotice('Draft saved and totals synced with the server.')
+    },
+  })
+
+  const addProduct = () => {
+    const product = products.find(item => item.id === selectedProductId)
+    if (!product || lines.some(line => line.productId === product.id)) return
+    setNotice('')
+    setLines(current => [...current, { productId: product.id, name: product.name, category: product.category, unitPrice: Number(product.price), qty: 1, discountPercent: 0 }])
+  }
+  const updateLine = (productId, field, value) => setLines(current => current.map(line => line.productId === productId ? { ...line, [field]: field === 'qty' ? Math.max(1, Number(value)) : Math.min(100, Math.max(0, Number(value))) } : line))
+  const removeLine = productId => setLines(current => current.filter(line => line.productId !== productId))
+
+  return <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_330px]">
+    <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+      <div className="flex items-start justify-between p-5"><div><h2 className="font-display text-base font-bold">{draftId ? `Draft ${shortId(draftId)}` : 'New quotation'}</h2><p className="mt-1 text-[10px] text-slate-400">Add products, quantities, and line discounts.</p></div><span className="rounded-full bg-slate-100 px-2 py-1 text-[9px] text-slate-600">Draft</span></div>
+      <div className="px-5 pb-5"><label className="text-[10px] font-semibold">Customer<input required disabled={Boolean(draftId)} className={`${inputClass} disabled:bg-slate-50 disabled:text-slate-500`} value={customerName} onChange={event => setCustomerName(event.target.value)} placeholder="Customer or company name" /></label>{draftId && <p className="mt-1 text-[9px] text-slate-400">Customer name is fixed after the draft is created.</p>}</div>
+      <div className="flex flex-col justify-between gap-3 border-t border-slate-100 p-5 sm:flex-row sm:items-center"><h3 className="text-xs font-semibold">Line items <span className="rounded-full bg-violet-50 px-1.5 py-0.5 text-[9px] text-violet-700">{lines.length}</span></h3><div className="flex gap-2"><select aria-label="Product" disabled={!products.length} className="max-w-[220px] rounded-lg border border-slate-200 bg-white px-2 text-[10px]" value={selectedProductId} onChange={event => setSelectedProductId(event.target.value)}>{products.map(product => <option value={product.id} key={product.id}>{product.name}</option>)}</select><button type="button" onClick={addProduct} disabled={!selectedProductId} className="flex items-center gap-1 rounded-lg border border-slate-200 px-3 py-2 text-[10px] font-semibold disabled:opacity-50"><Icon name="plus" />Add</button></div></div>
+      {!products.length && <p className="border-t border-slate-100 p-5 text-xs text-amber-700">No products are configured. Ask the admin to add products first.</p>}
+      {lines.length > 0 && <div><div className="hidden grid-cols-[minmax(190px,2fr)_55px_90px_90px_95px_20px] gap-2 border-y border-slate-100 bg-slate-50 px-5 py-2.5 text-[8px] text-slate-400 md:grid"><span>PRODUCT</span><span>QTY</span><span>UNIT PRICE</span><span>DISCOUNT</span><span>LINE TOTAL</span><span /></div>{lines.map(line => <div className="grid grid-cols-[1fr_55px_80px] items-center gap-2 border-b border-slate-100 px-5 py-3 text-[10px] md:grid-cols-[minmax(190px,2fr)_55px_90px_90px_95px_20px]" key={line.productId}><div className="col-span-3 flex items-center gap-2 md:col-span-1"><span className="grid size-8 place-items-center rounded-lg bg-violet-50 text-violet-600"><Icon name="box" /></span><div className="flex flex-col"><strong>{line.name}</strong><small className="mt-0.5 text-[8px] text-slate-400">{line.category}</small></div></div><input aria-label={`${line.name} quantity`} className="w-full rounded-md border border-slate-200 p-2" type="number" min="1" value={line.qty} onChange={event => updateLine(line.productId, 'qty', event.target.value)} /><span>{formatMoney(line.unitPrice)}</span><label className="flex items-center rounded-md border border-slate-200 p-2"><input aria-label={`${line.name} discount`} className="w-full min-w-0 border-0 outline-none" type="number" min="0" max="100" value={line.discountPercent} onChange={event => updateLine(line.productId, 'discountPercent', event.target.value)} /><span>%</span></label><strong>{formatMoney(line.unitPrice * line.qty * (1 - line.discountPercent / 100))}</strong><button type="button" aria-label={`Remove ${line.name}`} onClick={() => removeLine(line.productId)} className="text-lg text-slate-400 hover:text-red-500">×</button></div>)}</div>}
+    </section>
+    <aside className="sticky top-28 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm"><div className="bg-ink px-5 py-4 text-white"><span className="text-[9px] tracking-widest text-violet-200/70">QUOTATION SUMMARY</span></div><div className="space-y-2 border-b border-slate-100 p-5 text-[11px]"><SummaryLine label="Subtotal" value={formatMoney(totals.subtotal)} /><SummaryLine label="Discount" value={`−${formatMoney(totals.totalDiscount)}`} accent /><SummaryLine label="Grand total" value={formatMoney(totals.grandTotal)} strong /></div><div className="space-y-2 p-5">{notice && <p role="status" className="rounded-lg bg-emerald-50 p-3 text-[10px] text-emerald-700">{notice}</p>}{saveMutation.isError && <p role="alert" className="rounded-lg bg-red-50 p-3 text-[10px] text-red-700">{getApiError(saveMutation.error, 'Unable to save quotation')}</p>}<button type="button" disabled={saveMutation.isPending} onClick={() => saveMutation.mutate({ shouldConfirm: false })} className="w-full rounded-lg border border-slate-200 px-4 py-2.5 text-xs font-semibold disabled:opacity-50">Save draft</button><button type="button" disabled={saveMutation.isPending || !lines.length} onClick={() => saveMutation.mutate({ shouldConfirm: true })} className="flex w-full items-center justify-center gap-2 rounded-lg bg-violet-600 px-4 py-3 text-xs font-semibold text-white shadow-lg shadow-violet-600/20 disabled:opacity-50">{saveMutation.isPending ? 'Saving…' : 'Save & confirm'}<Icon name="arrow" /></button></div><p className="px-5 pb-5 text-center text-[8px] text-slate-400">Final prices and totals are always validated by the server.</p></aside>
+  </div>
+}
+
+function SummaryLine({ label, value, accent, strong }) {
+  return <div className="flex justify-between"><span className="text-slate-400">{label}</span><span className={`${accent ? 'text-coral' : ''} ${strong ? 'font-display text-base font-bold text-slate-900' : 'font-semibold'}`}>{value}</span></div>
+}
+
+function PanelMessage({ children, error = false }) {
+  return <div role={error ? 'alert' : undefined} className={`grid min-h-96 place-items-center rounded-xl border border-slate-200 bg-white text-sm shadow-sm ${error ? 'text-red-600' : 'text-slate-400'}`}>{children}</div>
+}

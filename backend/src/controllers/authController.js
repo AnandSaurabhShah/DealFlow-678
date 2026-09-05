@@ -5,7 +5,7 @@ const env = require("../config/env");
 const ApiError = require("../utils/apiError");
 const { requireFields } = require("../utils/validation");
 
-const ROLES = ["ADMIN", "REP", "MANAGER", "FINANCE"];
+const SIGNUP_ROLES = ["REP", "MANAGER", "FINANCE"];
 const publicUserSelect = { id: true, name: true, email: true, role: true, createdAt: true };
 
 function issueToken(user) {
@@ -28,8 +28,12 @@ async function signup(req, res) {
   if (password.length < 8) {
     throw new ApiError(400, "VALIDATION_ERROR", "Password must be at least 8 characters");
   }
-  if (!ROLES.includes(role)) {
-    throw new ApiError(400, "VALIDATION_ERROR", `role must be one of: ${ROLES.join(", ")}`);
+  if (!SIGNUP_ROLES.includes(role)) {
+    throw new ApiError(
+      400,
+      "VALIDATION_ERROR",
+      `role must be one of: ${SIGNUP_ROLES.join(", ")}; admins are system-provisioned`,
+    );
   }
 
   const existing = await prisma.user.findUnique({ where: { email }, select: { id: true } });

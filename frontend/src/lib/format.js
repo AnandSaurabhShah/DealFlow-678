@@ -1,5 +1,13 @@
 export const formatMoney = new Intl.NumberFormat('en-US', {
   style: 'currency',
   currency: 'USD',
-  maximumFractionDigits: 0,
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
 }).format
+
+export const formatDate = value => new Intl.DateTimeFormat('en', {
+  dateStyle: 'medium',
+  timeStyle: 'short',
+}).format(new Date(value))
+
+export const shortId = id => `Q-${id.slice(0, 8).toUpperCase()}`

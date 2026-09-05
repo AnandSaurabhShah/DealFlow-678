@@ -1,29 +1,50 @@
-import { useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
+import { Navigate, Outlet, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import AppShell from './components/AppShell'
-import { seedQuotes } from './data/mockData'
+import AdminConfigPage from './pages/AdminConfigPage'
 import LoginPage from './pages/LoginPage'
-import OverviewPage from './pages/OverviewPage'
 import QuotationBuilderPage from './pages/QuotationBuilderPage'
 import QuotationsPage from './pages/QuotationsPage'
+import { useAuthStore } from './store/authStore'
+
+const paths = { quotations: '/quotations', builder: '/quotations/new', config: '/configuration' }
 
 export default function App() {
-  const [user, setUser] = useState(() => JSON.parse(localStorage.getItem('df_user') || 'null'))
-  const [page, setPage] = useState('overview')
-  const [quotes, setQuotes] = useState(seedQuotes)
-  const login = nextUser => { localStorage.setItem('df_user', JSON.stringify(nextUser)); setUser(nextUser) }
-  const logout = () => { localStorage.removeItem('df_user'); setUser(null) }
-  const saveQuote = ({ customer, value }) => {
-    setQuotes([{ id: 'Q-1049', customer, contact: 'New contact', value, status: 'Draft', owner: user.name, updated: 'Just now' }, ...quotes])
-    setPage('quotes')
-  }
-  const deleteQuote = quoteId => {
-    setQuotes(currentQuotes => currentQuotes.filter(quote => quote.id !== quoteId))
+  const user = useAuthStore(state => state.user)
+  return <Routes>
+    <Route path="/login" element={user ? <Navigate to="/quotations" replace /> : <LoginPage />} />
+    <Route element={<ProtectedLayout />}>
+      <Route index element={<Navigate to="/quotations" replace />} />
+      <Route path="/quotations" element={<QuotationsPage />} />
+      <Route path="/quotations/new" element={<RoleGate roles={['REP']}><QuotationBuilderPage /></RoleGate>} />
+      <Route path="/quotations/:quotationId" element={<RoleGate roles={['REP']}><QuotationBuilderPage /></RoleGate>} />
+      <Route path="/configuration" element={<RoleGate roles={['ADMIN']}><AdminConfigPage /></RoleGate>} />
+    </Route>
+    <Route path="*" element={<Navigate to={user ? '/quotations' : '/login'} replace />} />
+  </Routes>
+}
+
+function ProtectedLayout() {
+  const queryClient = useQueryClient()
+  const location = useLocation()
+  const navigate = useNavigate()
+  const user = useAuthStore(state => state.user)
+  const logout = useAuthStore(state => state.logout)
+  if (!user) return <Navigate to="/login" replace />
+
+  const page = location.pathname === '/configuration'
+    ? 'config'
+    : location.pathname === '/quotations' ? 'quotations' : 'builder'
+  const signOut = () => {
+    logout()
+    queryClient.clear()
+    navigate('/login', { replace: true })
   }
 
-  if (!user) return <LoginPage onLogin={login} />
-  return <AppShell page={page} onNavigate={setPage} user={user} onLogout={logout}>
-    {page === 'overview' && <OverviewPage quotes={quotes} onNavigate={setPage} />}
-    {page === 'quotes' && <QuotationsPage quotes={quotes} onNavigate={setPage} onDelete={deleteQuote} />}
-    {page === 'builder' && <QuotationBuilderPage onSave={saveQuote} />}
-  </AppShell>
+  return <AppShell page={page} onNavigate={target => navigate(paths[target])} user={user} onLogout={signOut}><Outlet /></AppShell>
+}
+
+function RoleGate({ roles, children }) {
+  const role = useAuthStore(state => state.user?.role)
+  return roles.includes(role) ? children : <Navigate to="/quotations" replace />
 }

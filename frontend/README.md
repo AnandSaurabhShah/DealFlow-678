@@ -1,16 +1,21 @@
-# React + Vite
+# DealFlow360 frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+React and Vite frontend for the complete MVP 1 workflow.
 
-Currently, two official plugins are available:
+## Setup
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+1. Copy `.env.example` to `.env` and set `VITE_API_BASE_URL` to the backend origin (default: `http://localhost:4000`).
+2. Start and seed the backend as described in `../backend/README.md`.
+3. Install dependencies with `npm install`.
+4. Start the frontend with `npm run dev`.
 
-## React Compiler
+Zustand stores the authenticated session and workspace navigation. TanStack React Query owns API-backed products, configuration, and quotation state. Axios uses the backend contract from `../backend/API_CONTRACT.md` and attaches the JWT automatically.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## Included MVP 1 screens
 
-## Expanding the ESLint configuration
+- Real login and team signup. Admin signup is intentionally unavailable; the admin is seeded/configured by the system.
+- Role-aware quotation list.
+- Rep quotation builder with live client totals and server re-synchronization on save.
+- Admin create/list screens for products, price lists, warehouses, and discount tiers.
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+Run `npm run lint` and `npm run build` before handoff.

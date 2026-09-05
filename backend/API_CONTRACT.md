@@ -7,7 +7,7 @@ This contract is frozen for the MVP 1 frontend and matches the implemented BE-Ph
 - Base URL: `http://localhost:4000`
 - Authenticated requests use `Authorization: Bearer <token>`.
 - JSON request header: `Content-Type: application/json`.
-- Roles are `ADMIN`, `REP`, `MANAGER`, or `FINANCE`. Signup accepts either upper- or lowercase values and responses use uppercase.
+- Roles are `ADMIN`, `REP`, `MANAGER`, or `FINANCE`. Public signup accepts `REP`, `MANAGER`, or `FINANCE` in either upper- or lowercase; admins are system-provisioned. Responses use uppercase roles.
 - Prisma `Decimal` fields are serialized as JSON strings, for example `"1299"` or `"5"`.
 - Successful config endpoints wrap records in `{ "data": ... }`.
 - All errors use `{ "error": { "code": string, "message": string, "details"?: object } }`.
