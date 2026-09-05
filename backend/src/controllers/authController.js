@@ -9,7 +9,7 @@ const SIGNUP_ROLES = ["REP", "MANAGER", "FINANCE"];
 const publicUserSelect = { id: true, name: true, email: true, role: true, createdAt: true };
 
 function issueToken(user) {
-  return jwt.sign({ role: user.role }, env.jwtSecret, {
+  return jwt.sign({ type: "internal", role: user.role }, env.jwtSecret, {
     subject: user.id,
     expiresIn: env.jwtExpiresIn,
   });

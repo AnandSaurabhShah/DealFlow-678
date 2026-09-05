@@ -1,6 +1,6 @@
-# DealFlow360 API Contract — MVP 4
+# DealFlow360 API Contract — MVP 5
 
-This contract covers the implemented MVP 1–3 API and MVP 4 hybrid-billing backend.
+This contract covers the implemented MVP 1–4 APIs and MVP 5 customer-negotiation backend.
 
 ## Conventions
 
@@ -8,7 +8,8 @@ This contract covers the implemented MVP 1–3 API and MVP 4 hybrid-billing back
 - Authenticated requests use `Authorization: Bearer <token>`.
 - JSON request header: `Content-Type: application/json`.
 - Roles are `ADMIN`, `REP`, `MANAGER`, or `FINANCE`. Public signup accepts `REP`, `MANAGER`, or `FINANCE` in either upper- or lowercase; admins are system-provisioned. Responses use uppercase roles.
-- Quotation statuses are `DRAFT`, `PENDING_MANAGER_APPROVAL`, `PENDING_FINANCE_APPROVAL`, `APPROVED`, `REJECTED`, `CONFIRMED`, and `FULFILLED`.
+- Quotation statuses are `DRAFT`, `PENDING_MANAGER_APPROVAL`, `PENDING_FINANCE_APPROVAL`, `APPROVED`, `REJECTED`, `CONFIRMED`, `FULFILLED`, `SENT_TO_CUSTOMER`, and `UNDER_NEGOTIATION`.
+- Internal JWTs contain `type: "internal"`; customer JWTs contain `type: "customer"` and `customerId`. The token types are not interchangeable.
 - Prisma `Decimal` fields are serialized as JSON strings, for example `"1299"` or `"5"`.
 - Billing types are `ONE_TIME` and `RECURRING`; MVP 4 supports the `MONTHLY` recurring cycle only.
 - Successful config endpoints wrap records in `{ "data": ... }`.
@@ -437,3 +438,78 @@ Relevant billing errors:
 - `400 INVALID_FULFILLMENT_SPLIT`
 - `400 EMPTY_QUOTATION`
 - `500 INTERNAL_ERROR`
+
+## MVP 5 customer authentication
+
+Customer accounts are separate from internal `User` records. Customer auth routes are public but rate-limited. Password hashes are never returned.
+
+### `POST /api/customer-auth/signup` — PUBLIC
+
+Request: `{ "name": "Customer A", "email": "customer@example.test", "password": "Customer123!" }`
+
+Returns `201 { "token": "<customer-jwt>", "customer": { "id", "name", "email", "createdAt" } }`.
+
+Errors: `400 VALIDATION_ERROR`, `409 EMAIL_IN_USE`, `429 CUSTOMER_AUTH_RATE_LIMITED`.
+
+### `POST /api/customer-auth/login` — PUBLIC
+
+Request: `{ "email": "customer@example.test", "password": "Customer123!" }`
+
+Returns `200 { "token": "<customer-jwt>", "customer": { "id", "name", "email", "createdAt" } }`.
+
+Errors: `401 CUSTOMER_AUTH_FAILED`, `429 CUSTOMER_AUTH_RATE_LIMITED`.
+
+## MVP 5 internal negotiation routes
+
+These routes require an internal JWT. A customer token returns `401 UNAUTHENTICATED`.
+
+### `POST /api/quotations/:id/send-to-customer` — INTERNAL: REP, MANAGER, ADMIN
+
+Request: `{ "customerId": "<uuid>" }`
+
+The owning REP, a MANAGER, or ADMIN can send an `APPROVED` quotation. When `customerId` is omitted, the quotation's existing customer is used. The endpoint links the customer, records access time and an audit event, and changes status to `SENT_TO_CUSTOMER`.
+
+A REP cannot send another REP's quotation. A quotation with generated invoices or schedules cannot enter negotiation because customer changes would invalidate billing.
+
+Errors: `400 CUSTOMER_REQUIRED`, `400 INVALID_REFERENCE`, `403 FORBIDDEN`, `409 INVALID_QUOTATION_STATUS`, `409 BILLING_ALREADY_GENERATED`, `409 NEGOTIATION_CONFLICT`.
+
+### `GET /api/quotations/:id/comments` — INTERNAL
+
+Returns `{ "data": { "customer", "comments": [], "events": [] } }`. Comments identify the safe author display name and optional quotation-line/product context. Events contain `actorType`, safe actor display name, action, details, and timestamp. REP access is limited to owned quotations; existing internal read behavior applies to other roles.
+
+### `POST /api/quotations/:id/comments` — INTERNAL: REP, MANAGER, ADMIN
+
+Request: `{ "content": "We can review this request.", "quotationLineId": "<optional-line-uuid>" }`
+
+Returns the created comment with `201`. The quotation must already have been sent, and an optional line must belong to it.
+
+## MVP 5 customer portal routes
+
+All `/api/portal/*` routes require a customer JWT. Queries are scoped by both quotation ID and authenticated `customerId`; inaccessible quotations return `404 CUSTOMER_QUOTATION_NOT_FOUND` to prevent record enumeration. Internal JWTs return `401 CUSTOMER_UNAUTHENTICATED`.
+
+### `GET /api/portal/quotations/:id` — CUSTOMER ONLY
+
+Returns an explicit customer-safe DTO with `id`, `customerName`, `status`, totals, timestamps, safe line/product fields, and comments. It never exposes risk, approval logs/reasons, REP data, fulfillment, billing, product cost, or operational relations.
+
+### `POST /api/portal/quotations/:id/comments` — CUSTOMER ONLY
+
+Request: `{ "content": "Please review this line.", "quotationLineId": "<optional-line-uuid>" }`
+
+Creates an order-level or line-level comment with `201`. Only `SENT_TO_CUSTOMER` and `UNDER_NEGOTIATION` quotations accept new customer comments. Content is trimmed and limited to 2000 characters.
+
+### `PUT /api/portal/quotations/:id/lines/:lineId/discount` — CUSTOMER ONLY
+
+Request: `{ "discountPercent": "18" }`
+
+Valid range is 0–100. The line must belong to the scoped quotation. The transaction updates the discount, recalculates line and quotation totals with the shared Decimal calculator, records an audit event, and changes status to `UNDER_NEGOTIATION`.
+
+### `POST /api/portal/quotations/:id/confirm` — CUSTOMER ONLY
+
+No request body is required. The transaction recalculates totals and blended risk using the existing MVP2 governance service, increments the approval round, records audit events, and returns the updated customer-safe quotation.
+
+- Within-limit terms → `APPROVED`.
+- Moderate over-limit terms → `PENDING_MANAGER_APPROVAL`.
+- High-risk terms → `PENDING_FINANCE_APPROVAL`, but manager-first routing assigns the new approval round to MANAGER before FINANCE.
+- A repeated confirm after leaving the negotiable state returns `409 QUOTATION_NOT_NEGOTIABLE`.
+
+Relevant portal errors: `400 VALIDATION_ERROR`, `400 INVALID_QUOTATION_LINE`, `401 CUSTOMER_UNAUTHENTICATED`, `401 CUSTOMER_AUTH_FAILED`, `404 CUSTOMER_QUOTATION_NOT_FOUND`, `409 QUOTATION_NOT_NEGOTIABLE`, `409 NEGOTIATION_CONFLICT`, `409 DISCOUNT_TIER_REQUIRED`, `429 CUSTOMER_AUTH_RATE_LIMITED`, and `429 PORTAL_RATE_LIMITED`.

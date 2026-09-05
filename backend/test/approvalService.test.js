@@ -37,3 +37,21 @@ test("moderate risk becomes approved after manager approval", () => {
   assert.equal(getRequiredApproverRole(quotation), "MANAGER");
   assert.equal(getStatusAfterApproval(quotation, "MANAGER"), "APPROVED");
 });
+
+test("does not reuse a manager approval from an earlier approval round", () => {
+  const quotation = {
+    status: "PENDING_FINANCE_APPROVAL",
+    blendedRiskScore: new Prisma.Decimal(15),
+    approvalRound: 2,
+    approvalLogs: [
+      { approvalRound: 1, action: "APPROVED", actor: { role: "MANAGER" } },
+    ],
+  };
+  assert.equal(getRequiredApproverRole(quotation), "MANAGER");
+  quotation.approvalLogs.push({
+    approvalRound: 2,
+    action: "APPROVED",
+    actor: { role: "MANAGER" },
+  });
+  assert.equal(getRequiredApproverRole(quotation), "FINANCE");
+});

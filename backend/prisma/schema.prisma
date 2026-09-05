@@ -26,6 +26,8 @@ enum QuotationStatus {
   REJECTED
   CONFIRMED
   FULFILLED
+  SENT_TO_CUSTOMER
+  UNDER_NEGOTIATION
 }
 
 enum ApprovalAction {
@@ -49,6 +51,18 @@ enum ScheduleEntryStatus {
   CANCELLED
 }
 
+enum CommentAuthorType {
+  CUSTOMER
+  INTERNAL
+}
+
+enum NegotiationEventAction {
+  SENT_TO_CUSTOMER
+  DISCOUNT_UPDATED
+  CUSTOMER_CONFIRMED
+  APPROVAL_REENTRY
+}
+
 model User {
   id           String        @id @default(uuid())
   name         String
@@ -58,6 +72,15 @@ model User {
   quotations   Quotation[]
   approvalLogs ApprovalLog[]
   createdAt    DateTime      @default(now())
+}
+
+model Customer {
+  id           String      @id @default(uuid())
+  name         String
+  email        String      @unique
+  passwordHash String
+  quotations   Quotation[]
+  createdAt    DateTime    @default(now())
 }
 
 model Product {
@@ -123,21 +146,29 @@ model CategoryDiscountOverride {
 }
 
 model Quotation {
-  id                String             @id @default(uuid())
-  customerName      String
-  repId             String
-  status            QuotationStatus    @default(DRAFT)
-  subtotal          Decimal            @default(0)
-  totalDiscount     Decimal            @default(0)
-  grandTotal        Decimal            @default(0)
-  blendedRiskScore  Decimal            @default(0)
-  rep               User               @relation(fields: [repId], references: [id])
-  lines             QuotationLine[]
-  approvalLogs      ApprovalLog[]
-  fulfillmentSplits FulfillmentSplit[]
-  invoices          Invoice[]
-  createdAt         DateTime           @default(now())
-  updatedAt         DateTime           @updatedAt
+  id                  String               @id @default(uuid())
+  customerName        String
+  repId               String
+  customerId          String?
+  status              QuotationStatus      @default(DRAFT)
+  subtotal            Decimal              @default(0)
+  totalDiscount       Decimal              @default(0)
+  grandTotal          Decimal              @default(0)
+  blendedRiskScore    Decimal              @default(0)
+  approvalRound       Int                  @default(0)
+  sentToCustomerAt    DateTime?
+  rep                 User                 @relation(fields: [repId], references: [id])
+  customer            Customer?            @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  lines               QuotationLine[]
+  approvalLogs        ApprovalLog[]
+  negotiationComments NegotiationComment[]
+  negotiationEvents   NegotiationEvent[]
+  fulfillmentSplits   FulfillmentSplit[]
+  invoices            Invoice[]
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+
+  @@index([customerId])
 }
 
 model QuotationLine {
@@ -155,20 +186,56 @@ model QuotationLine {
   product                Product                @relation(fields: [productId], references: [id])
   billingScheduleEntries BillingScheduleEntry[]
   creditNotes            CreditNote[]
+  negotiationComments    NegotiationComment[]
+  negotiationEvents      NegotiationEvent[]
 }
 
 model ApprovalLog {
-  id          String         @id @default(uuid())
-  quotationId String
-  actorId     String
-  action      ApprovalAction
-  reason      String?
-  createdAt   DateTime       @default(now())
-  quotation   Quotation      @relation(fields: [quotationId], references: [id])
-  actor       User           @relation(fields: [actorId], references: [id])
+  id            String         @id @default(uuid())
+  quotationId   String
+  actorId       String
+  action        ApprovalAction
+  approvalRound Int            @default(0)
+  reason        String?
+  createdAt     DateTime       @default(now())
+  quotation     Quotation      @relation(fields: [quotationId], references: [id])
+  actor         User           @relation(fields: [actorId], references: [id])
 
   @@index([quotationId, createdAt])
   @@index([actorId])
+}
+
+model NegotiationComment {
+  id              String            @id @default(uuid())
+  quotationId     String
+  quotationLineId String?
+  authorType      CommentAuthorType
+  authorId        String
+  content         String
+  quotation       Quotation         @relation(fields: [quotationId], references: [id], onDelete: Cascade)
+  quotationLine   QuotationLine?    @relation(fields: [quotationLineId], references: [id], onDelete: SetNull)
+  createdAt       DateTime          @default(now())
+
+  @@index([quotationId, createdAt])
+  @@index([quotationLineId])
+  @@index([authorType, authorId])
+}
+
+model NegotiationEvent {
+  id              String                 @id @default(uuid())
+  quotationId     String
+  quotationLineId String?
+  actorType       CommentAuthorType
+  actorId         String
+  action          NegotiationEventAction
+  details         Json?
+  quotation       Quotation              @relation(fields: [quotationId], references: [id], onDelete: Cascade)
+  quotationLine   QuotationLine?         @relation(fields: [quotationLineId], references: [id], onDelete: SetNull)
+  createdAt       DateTime               @default(now())
+
+  @@index([quotationId, createdAt])
+  @@index([quotationLineId])
+  @@index([actorType, actorId])
 }
 
 model FulfillmentSplit {

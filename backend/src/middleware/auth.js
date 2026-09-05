@@ -17,6 +17,10 @@ const authenticate = asyncHandler(async (req, _res, next) => {
     throw new ApiError(401, "UNAUTHENTICATED", "Token is invalid or expired");
   }
 
+  if (payload.type !== "internal") {
+    throw new ApiError(401, "UNAUTHENTICATED", "An internal access token is required");
+  }
+
   const user = await prisma.user.findUnique({
     where: { id: payload.sub },
     select: { id: true, name: true, email: true, role: true },
@@ -38,4 +42,4 @@ function authorize(...roles) {
   };
 }
 
-module.exports = { authenticate, authorize };
+module.exports = { authenticate, authenticateInternal: authenticate, authorize };

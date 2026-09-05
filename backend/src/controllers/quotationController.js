@@ -2,12 +2,11 @@ const prisma = require("../config/prisma");
 const ApiError = require("../utils/apiError");
 const { requireFields, decimalString, integer } = require("../utils/validation");
 const {
-  calculateBlendedRiskScore,
   calculateLineTotal,
   calculateQuotationTotals,
 } = require("../services/quotationCalculator");
+const { evaluateGovernance } = require("../services/governanceService");
 const {
-  getInitialApprovalStatus,
   getRequiredApproverRole,
   getStatusAfterApproval,
 } = require("../services/approvalService");
@@ -179,27 +178,15 @@ async function confirmQuotation(req, res) {
     throw new ApiError(409, "INVALID_QUOTATION_STATUS", "Only a draft quotation can be submitted");
   }
 
-  const discountTier = await prisma.discountTier.findUnique({
-    where: { tierName: "Standard" },
-    include: { categoryOverrides: true },
-  });
-  const activeTier = discountTier || await prisma.discountTier.findFirst({
-    include: { categoryOverrides: true },
-    orderBy: { createdAt: "asc" },
-  });
-  if (!activeTier) {
-    throw new ApiError(
-      409,
-      "DISCOUNT_TIER_REQUIRED",
-      "Configure one discount tier before submitting quotations",
-    );
-  }
-  const score = calculateBlendedRiskScore(quotation.lines, activeTier);
-  const status = getInitialApprovalStatus(score);
+  const { blendedRiskScore, status } = await evaluateGovernance(quotation.lines, prisma);
 
   const confirmed = await prisma.quotation.update({
     where: { id: quotation.id },
-    data: { status, blendedRiskScore: score },
+    data: {
+      status,
+      blendedRiskScore,
+      approvalRound: quotation.approvalRound + 1,
+    },
     include: quotationInclude,
   });
   res.json({ data: confirmed });
@@ -284,13 +271,22 @@ async function applyApprovalAction({ quotationId, actor, action, reason }) {
       : action === "REJECTED" ? "REJECTED" : "DRAFT";
 
     await tx.approvalLog.create({
-      data: { quotationId, actorId: actor.id, action, reason },
+      data: {
+        quotationId,
+        actorId: actor.id,
+        action,
+        reason,
+        approvalRound: quotation.approvalRound,
+      },
     });
     return tx.quotation.update({
       where: { id: quotationId },
       data: {
         status,
-        ...(action === "RETURNED" ? { blendedRiskScore: 0 } : {}),
+        ...(action === "RETURNED" ? {
+          blendedRiskScore: 0,
+          sentToCustomerAt: null,
+        } : {}),
       },
       include: quotationInclude,
     });

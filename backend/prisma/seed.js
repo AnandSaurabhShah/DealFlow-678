@@ -17,11 +17,20 @@ const prisma = new PrismaClient({
 });
 
 async function main() {
-  const [adminPasswordHash, repPasswordHash, managerPasswordHash, financePasswordHash] = await Promise.all([
+  const [
+    adminPasswordHash,
+    repPasswordHash,
+    managerPasswordHash,
+    financePasswordHash,
+    customerPasswordHash,
+    customerBPasswordHash,
+  ] = await Promise.all([
     bcrypt.hash(process.env.SEED_ADMIN_PASSWORD || "Admin123!", 12),
     bcrypt.hash(process.env.SEED_REP_PASSWORD || "Rep12345!", 12),
     bcrypt.hash(process.env.SEED_MANAGER_PASSWORD || "Manager123!", 12),
     bcrypt.hash(process.env.SEED_FINANCE_PASSWORD || "Finance123!", 12),
+    bcrypt.hash(process.env.SEED_CUSTOMER_PASSWORD || "Customer123!", 12),
+    bcrypt.hash(process.env.SEED_CUSTOMER_B_PASSWORD || "CustomerB123!", 12),
   ]);
 
   await prisma.user.upsert({
@@ -62,6 +71,27 @@ async function main() {
       email: "rep@dealflow360.test",
       role: "REP",
       passwordHash: repPasswordHash,
+    },
+  });
+
+  const customerA = await prisma.customer.upsert({
+    where: { email: "customer.a@dealflow360.test" },
+    update: { name: "Demo Customer A", passwordHash: customerPasswordHash },
+    create: {
+      id: "00000000-0000-4000-8000-000000000801",
+      name: "Demo Customer A",
+      email: "customer.a@dealflow360.test",
+      passwordHash: customerPasswordHash,
+    },
+  });
+  const customerB = await prisma.customer.upsert({
+    where: { email: "customer.b@dealflow360.test" },
+    update: { name: "Demo Customer B", passwordHash: customerBPasswordHash },
+    create: {
+      id: "00000000-0000-4000-8000-000000000802",
+      name: "Demo Customer B",
+      email: "customer.b@dealflow360.test",
+      passwordHash: customerBPasswordHash,
     },
   });
 
@@ -445,8 +475,50 @@ async function main() {
     await seedMvp4Quotation({ ...scenario, repId: rep.id, discountTier: approvalTier });
   }
 
+  const mvp5Scenarios = [
+    {
+      id: "00000000-0000-4000-8000-000000000701",
+      customer: customerA,
+      status: "APPROVED",
+      sentToCustomerAt: null,
+      lines: [{
+        id: "00000000-0000-4000-8000-000000000711",
+        product: setup,
+        qty: 2,
+        discountPercent: "8.00",
+      }],
+    },
+    {
+      id: "00000000-0000-4000-8000-000000000702",
+      customer: customerA,
+      status: "APPROVED",
+      sentToCustomerAt: null,
+      lines: [{
+        id: "00000000-0000-4000-8000-000000000712",
+        product: setup,
+        qty: 3,
+        discountPercent: "8.00",
+      }],
+    },
+    {
+      id: "00000000-0000-4000-8000-000000000703",
+      customer: customerB,
+      status: "SENT_TO_CUSTOMER",
+      sentToCustomerAt: new Date("2026-09-06T08:00:00.000Z"),
+      lines: [{
+        id: "00000000-0000-4000-8000-000000000713",
+        product: setup,
+        qty: 1,
+        discountPercent: "5.00",
+      }],
+    },
+  ];
+  for (const scenario of mvp5Scenarios) {
+    await seedMvp5Quotation({ ...scenario, repId: rep.id, internalActorId: rep.id });
+  }
+
   console.log(
-    `Seeded demo users, catalog, discount rules, ${mvp2Scenarios.length} MVP 2 scenarios, ${mvp3Scenarios.length} MVP 3 scenarios, and ${mvp4Scenarios.length} MVP 4 billing scenarios`,
+    `Seeded demo users, catalog, discount rules, ${mvp2Scenarios.length} MVP 2 scenarios, ${mvp3Scenarios.length} MVP 3 scenarios, ${mvp4Scenarios.length} MVP 4 billing scenarios, and ${mvp5Scenarios.length} MVP 5 negotiation scenarios`,
   );
 }
 
@@ -482,8 +554,11 @@ async function seedMvp2Quotation({
       where: { id },
       update: {
         customerName,
+        customerId: null,
         repId,
         status,
+        sentToCustomerAt: null,
+        approvalRound: 0,
         ...totals,
         blendedRiskScore: currentRiskScore ?? calculatedRiskScore,
       },
@@ -542,7 +617,16 @@ async function seedMvp3Quotation({
     await clearQuotationDependents(tx, id);
     await tx.quotation.upsert({
       where: { id },
-      update: { customerName, repId, status, ...totals, blendedRiskScore },
+      update: {
+        customerName,
+        customerId: null,
+        repId,
+        status,
+        sentToCustomerAt: null,
+        approvalRound: 0,
+        ...totals,
+        blendedRiskScore,
+      },
       create: { id, customerName, repId, status, ...totals, blendedRiskScore },
     });
     await tx.quotationLine.createMany({
@@ -594,7 +678,16 @@ async function seedMvp4Quotation({
     await clearQuotationDependents(tx, id);
     await tx.quotation.upsert({
       where: { id },
-      update: { customerName, repId, status, ...totals, blendedRiskScore },
+      update: {
+        customerName,
+        customerId: null,
+        repId,
+        status,
+        sentToCustomerAt: null,
+        approvalRound: 0,
+        ...totals,
+        blendedRiskScore,
+      },
       create: { id, customerName, repId, status, ...totals, blendedRiskScore },
     });
     await tx.quotationLine.createMany({
@@ -621,6 +714,77 @@ async function seedMvp4Quotation({
   });
 }
 
+async function seedMvp5Quotation({
+  id,
+  customer,
+  repId,
+  status,
+  sentToCustomerAt,
+  lines,
+  internalActorId,
+}) {
+  const calculatedLines = lines.map((line) => ({
+    ...line,
+    productId: line.product.id,
+    unitPrice: line.product.price,
+    billingType: line.product.billingType,
+    billingCycle: line.product.billingCycle,
+  }));
+  const totals = calculateQuotationTotals(calculatedLines);
+  await prisma.$transaction(async (tx) => {
+    await clearQuotationDependents(tx, id);
+    await tx.quotation.upsert({
+      where: { id },
+      update: {
+        customerName: customer.name,
+        customerId: customer.id,
+        repId,
+        status,
+        sentToCustomerAt,
+        approvalRound: 0,
+        blendedRiskScore: 0,
+        ...totals,
+      },
+      create: {
+        id,
+        customerName: customer.name,
+        customerId: customer.id,
+        repId,
+        status,
+        sentToCustomerAt,
+        approvalRound: 0,
+        blendedRiskScore: 0,
+        ...totals,
+      },
+    });
+    await tx.quotationLine.createMany({
+      data: calculatedLines.map((line) => ({
+        id: line.id,
+        quotationId: id,
+        productId: line.productId,
+        qty: line.qty,
+        unitPrice: line.unitPrice,
+        discountPercent: line.discountPercent,
+        lineTotal: calculateLineTotal(line).lineTotal,
+        billingType: line.billingType,
+        billingCycle: line.billingCycle,
+      })),
+    });
+    if (sentToCustomerAt) {
+      await tx.negotiationEvent.create({
+        data: {
+          quotationId: id,
+          actorType: "INTERNAL",
+          actorId: internalActorId,
+          action: "SENT_TO_CUSTOMER",
+          details: { customerId: customer.id, seeded: true },
+          createdAt: sentToCustomerAt,
+        },
+      });
+    }
+  });
+}
+
 async function clearQuotationDependents(tx, quotationId) {
   const lineIds = (await tx.quotationLine.findMany({
     where: { quotationId },
@@ -630,6 +794,8 @@ async function clearQuotationDependents(tx, quotationId) {
     await tx.billingScheduleEntry.deleteMany({ where: { quotationLineId: { in: lineIds } } });
     await tx.creditNote.deleteMany({ where: { quotationLineId: { in: lineIds } } });
   }
+  await tx.negotiationComment.deleteMany({ where: { quotationId } });
+  await tx.negotiationEvent.deleteMany({ where: { quotationId } });
   await tx.invoice.deleteMany({ where: { quotationId } });
   await tx.fulfillmentSplit.deleteMany({ where: { quotationId } });
   await tx.approvalLog.deleteMany({ where: { quotationId } });

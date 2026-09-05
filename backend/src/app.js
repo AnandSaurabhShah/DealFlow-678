@@ -3,6 +3,8 @@ const cors = require("cors");
 const prisma = require("./config/prisma");
 const env = require("./config/env");
 const authRoutes = require("./routes/authRoutes");
+const customerAuthRoutes = require("./routes/customerAuthRoutes");
+const portalRoutes = require("./routes/portalRoutes");
 const configRoutes = require("./routes/configRoutes");
 const quotationRoutes = require("./routes/quotationRoutes");
 const billingRoutes = require("./routes/billingRoutes");
@@ -34,6 +36,8 @@ app.get(
 );
 
 app.use("/api/auth", authRoutes);
+app.use("/api/customer-auth", customerAuthRoutes);
+app.use("/api/portal", portalRoutes);
 app.use("/api", billingRoutes);
 app.use("/api/quotations", quotationRoutes);
 app.use("/api", configRoutes);

@@ -1,6 +1,6 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { requireFields, decimalString, integer } = require("../src/utils/validation");
+const { requireFields, decimalString, integer, uuid } = require("../src/utils/validation");
 
 test("requireFields reports all missing fields", () => {
   assert.throws(
@@ -20,6 +20,15 @@ test("decimalString preserves decimal input for Prisma", () => {
   assert.equal(decimalString("1299.00", "price", { min: 0 }), "1299.00");
   assert.throws(() => decimalString("nope", "price"), /valid number/);
   assert.throws(() => decimalString(-1, "price", { min: 0 }), /valid number/);
+  assert.equal(decimalString(0, "discountPercent", { min: 0, max: 100 }), "0");
+  assert.equal(decimalString(100, "discountPercent", { min: 0, max: 100 }), "100");
+  assert.throws(() => decimalString(101, "discountPercent", { min: 0, max: 100 }), /valid number/);
+});
+
+test("uuid accepts UUIDs and rejects malformed resource identifiers", () => {
+  const value = "00000000-0000-4000-8000-000000000701";
+  assert.equal(uuid(value, "quotationId"), value);
+  assert.throws(() => uuid("not-a-uuid", "quotationId"), /valid UUID/);
 });
 
 test("integer rejects fractional and negative quantities", () => {

@@ -1,5 +1,6 @@
 const express = require("express");
 const controller = require("../controllers/quotationController");
+const negotiationController = require("../controllers/negotiationController");
 const { authenticate, authorize } = require("../middleware/auth");
 const asyncHandler = require("../utils/asyncHandler");
 
@@ -13,6 +14,17 @@ router.get(
   asyncHandler(controller.listPendingApprovals),
 );
 router.get("/:id/history", asyncHandler(controller.getQuotationHistory));
+router.post(
+  "/:id/send-to-customer",
+  authorize("REP", "MANAGER", "ADMIN"),
+  asyncHandler(negotiationController.sendToCustomer),
+);
+router.get("/:id/comments", asyncHandler(negotiationController.getInternalComments));
+router.post(
+  "/:id/comments",
+  authorize("REP", "MANAGER", "ADMIN"),
+  asyncHandler(negotiationController.createInternalComment),
+);
 router.get(
   "/:id/fulfillment/suggest",
   authorize("REP", "ADMIN"),

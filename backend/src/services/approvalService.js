@@ -7,8 +7,10 @@ function getInitialApprovalStatus(score) {
 }
 
 function hasManagerApproval(quotation) {
+  const currentRound = quotation.approvalRound || 0;
   return (quotation.approvalLogs || []).some(
-    (log) => log.action === "APPROVED" && log.actor?.role === "MANAGER",
+    (log) => (log.approvalRound || 0) === currentRound &&
+      log.action === "APPROVED" && log.actor?.role === "MANAGER",
   );
 }
 

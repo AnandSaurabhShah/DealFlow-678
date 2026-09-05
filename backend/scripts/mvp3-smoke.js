@@ -61,11 +61,16 @@ async function main() {
     login("admin@dealflow360.test", process.env.SEED_ADMIN_PASSWORD || "Admin123!"),
   ]);
   const headers = { authorization: `Bearer ${token}` };
-  const product = await prisma.product.findFirst({ where: { category: "Hardware" } });
-  expect(product, "A seeded Hardware product is required");
-
   const centralId = "00000000-0000-4000-8000-000000000201";
   const westId = "00000000-0000-4000-8000-000000000202";
+  const product = await prisma.product.findFirst({
+    where: {
+      name: "ProBook 14 Laptop",
+      stockLevels: { some: { warehouseId: centralId } },
+    },
+  });
+  expect(product, "The seeded ProBook hardware product is required");
+
   await Promise.all([
     prisma.stockLevel.update({
       where: { warehouseId_productId: { warehouseId: centralId, productId: product.id } },
