@@ -2,12 +2,14 @@ import { useQueryClient } from '@tanstack/react-query'
 import { Navigate, Outlet, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import AppShell from './components/AppShell'
 import AdminConfigPage from './pages/AdminConfigPage'
+import ApprovalDetailPage from './pages/ApprovalDetailPage'
+import ApprovalsPage from './pages/ApprovalsPage'
 import LoginPage from './pages/LoginPage'
 import QuotationBuilderPage from './pages/QuotationBuilderPage'
 import QuotationsPage from './pages/QuotationsPage'
 import { useAuthStore } from './store/authStore'
 
-const paths = { quotations: '/quotations', builder: '/quotations/new', config: '/configuration' }
+const paths = { quotations: '/quotations', builder: '/quotations/new', approvals: '/approvals', config: '/configuration' }
 
 export default function App() {
   const user = useAuthStore(state => state.user)
@@ -18,6 +20,8 @@ export default function App() {
       <Route path="/quotations" element={<QuotationsPage />} />
       <Route path="/quotations/new" element={<RoleGate roles={['REP']}><QuotationBuilderPage /></RoleGate>} />
       <Route path="/quotations/:quotationId" element={<RoleGate roles={['REP']}><QuotationBuilderPage /></RoleGate>} />
+      <Route path="/approvals" element={<RoleGate roles={['MANAGER', 'FINANCE']}><ApprovalsPage /></RoleGate>} />
+      <Route path="/approvals/:quotationId" element={<ApprovalDetailPage />} />
       <Route path="/configuration" element={<RoleGate roles={['ADMIN']}><AdminConfigPage /></RoleGate>} />
     </Route>
     <Route path="*" element={<Navigate to={user ? '/quotations' : '/login'} replace />} />
@@ -32,9 +36,11 @@ function ProtectedLayout() {
   const logout = useAuthStore(state => state.logout)
   if (!user) return <Navigate to="/login" replace />
 
-  const page = location.pathname === '/configuration'
-    ? 'config'
-    : location.pathname === '/quotations' ? 'quotations' : 'builder'
+  const page = location.pathname.startsWith('/approvals')
+    ? 'approvals'
+    : location.pathname === '/configuration'
+      ? 'config'
+      : location.pathname === '/quotations' ? 'quotations' : 'builder'
   const signOut = () => {
     logout()
     queryClient.clear()
