@@ -97,6 +97,16 @@ async function main() {
     },
   });
 
+  const westWarehouse = await prisma.warehouse.upsert({
+    where: { id: "00000000-0000-4000-8000-000000000202" },
+    update: { name: "West Warehouse", location: "Mumbai" },
+    create: {
+      id: "00000000-0000-4000-8000-000000000202",
+      name: "West Warehouse",
+      location: "Mumbai",
+    },
+  });
+
   await Promise.all([
     prisma.stockLevel.upsert({
       where: { warehouseId_productId: { warehouseId: warehouse.id, productId: laptop.id } },
@@ -107,6 +117,11 @@ async function main() {
       where: { warehouseId_productId: { warehouseId: warehouse.id, productId: setup.id } },
       update: { qty: 100 },
       create: { warehouseId: warehouse.id, productId: setup.id, qty: 100 },
+    }),
+    prisma.stockLevel.upsert({
+      where: { warehouseId_productId: { warehouseId: westWarehouse.id, productId: laptop.id } },
+      update: { qty: 15 },
+      create: { warehouseId: westWarehouse.id, productId: laptop.id, qty: 15 },
     }),
   ]);
 
@@ -130,7 +145,7 @@ async function main() {
     },
   });
 
-  console.log("Seeded demo users, products, price list, warehouse stock, and discount rules");
+  console.log("Seeded demo users, products, price list, two warehouses, stock, and discount rules");
 }
 
 async function findOrCreateProduct(data) {

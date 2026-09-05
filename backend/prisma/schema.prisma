@@ -25,6 +25,7 @@ enum QuotationStatus {
   APPROVED
   REJECTED
   CONFIRMED
+  FULFILLED
 }
 
 enum ApprovalAction {
@@ -34,27 +35,28 @@ enum ApprovalAction {
 }
 
 model User {
-  id           String      @id @default(uuid())
+  id           String        @id @default(uuid())
   name         String
-  email        String      @unique
+  email        String        @unique
   passwordHash String
   role         Role
   quotations   Quotation[]
   approvalLogs ApprovalLog[]
-  createdAt    DateTime    @default(now())
+  createdAt    DateTime      @default(now())
 }
 
 model Product {
-  id             String          @id @default(uuid())
-  name           String
-  category       String
-  price          Decimal
-  unit           String
-  tax            Decimal         @default(0)
-  description    String?
-  quotationLines QuotationLine[]
-  stockLevels    StockLevel[]
-  createdAt      DateTime        @default(now())
+  id                String             @id @default(uuid())
+  name              String
+  category          String
+  price             Decimal
+  unit              String
+  tax               Decimal            @default(0)
+  description       String?
+  quotationLines    QuotationLine[]
+  stockLevels       StockLevel[]
+  fulfillmentSplits FulfillmentSplit[]
+  createdAt         DateTime           @default(now())
 }
 
 model PriceList {
@@ -66,11 +68,12 @@ model PriceList {
 }
 
 model Warehouse {
-  id          String       @id @default(uuid())
-  name        String
-  location    String?
-  stockLevels StockLevel[]
-  createdAt   DateTime     @default(now())
+  id                String             @id @default(uuid())
+  name              String
+  location          String?
+  stockLevels       StockLevel[]
+  fulfillmentSplits FulfillmentSplit[]
+  createdAt         DateTime           @default(now())
 }
 
 model StockLevel {
@@ -103,19 +106,20 @@ model CategoryDiscountOverride {
 }
 
 model Quotation {
-  id            String          @id @default(uuid())
-  customerName  String
-  repId         String
-  status        QuotationStatus @default(DRAFT)
-  subtotal      Decimal         @default(0)
-  totalDiscount Decimal         @default(0)
-  grandTotal    Decimal         @default(0)
-  blendedRiskScore Decimal      @default(0)
-  rep           User            @relation(fields: [repId], references: [id])
-  lines         QuotationLine[]
-  approvalLogs  ApprovalLog[]
-  createdAt     DateTime        @default(now())
-  updatedAt     DateTime        @updatedAt
+  id                String             @id @default(uuid())
+  customerName      String
+  repId             String
+  status            QuotationStatus    @default(DRAFT)
+  subtotal          Decimal            @default(0)
+  totalDiscount     Decimal            @default(0)
+  grandTotal        Decimal            @default(0)
+  blendedRiskScore  Decimal            @default(0)
+  rep               User               @relation(fields: [repId], references: [id])
+  lines             QuotationLine[]
+  approvalLogs      ApprovalLog[]
+  fulfillmentSplits FulfillmentSplit[]
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
 }
 
 model QuotationLine {
@@ -142,4 +146,21 @@ model ApprovalLog {
 
   @@index([quotationId, createdAt])
   @@index([actorId])
+}
+
+model FulfillmentSplit {
+  id             String    @id @default(uuid())
+  quotationId    String
+  warehouseId    String
+  productId      String
+  qtyFulfilled   Int
+  qtyBackordered Int       @default(0)
+  quotation      Quotation @relation(fields: [quotationId], references: [id])
+  warehouse      Warehouse @relation(fields: [warehouseId], references: [id])
+  product        Product   @relation(fields: [productId], references: [id])
+  createdAt      DateTime  @default(now())
+
+  @@unique([quotationId, warehouseId, productId])
+  @@index([warehouseId])
+  @@index([productId])
 }
