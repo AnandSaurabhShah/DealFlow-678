@@ -75,6 +75,35 @@ export function useReturnQuotation() {
   return useApprovalMutation(({ id, reason }) => quotationApi.returnForRevision(id, reason))
 }
 
+export function useNegotiationThread(id, enabled = true) {
+  return useQuery({
+    queryKey: ['negotiationThread', id],
+    queryFn: () => quotationApi.negotiationThread(id),
+    enabled: Boolean(id && enabled),
+    staleTime: 0,
+  })
+}
+
+export function useSendToCustomer() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, customerId }) => quotationApi.sendToCustomer(id, customerId),
+    onSuccess: quotation => {
+      queryClient.setQueryData(['quotation', quotation.id], quotation)
+      queryClient.invalidateQueries({ queryKey: ['quotations'] })
+      queryClient.invalidateQueries({ queryKey: ['negotiationThread', quotation.id] })
+    },
+  })
+}
+
+export function useInternalNegotiationComment() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, ...body }) => quotationApi.addNegotiationComment(id, body),
+    onSuccess: (_comment, variables) => queryClient.invalidateQueries({ queryKey: ['negotiationThread', variables.id] }),
+  })
+}
+
 export function useFulfillmentSuggestion(id, enabled = true) {
   return useQuery({
     queryKey: ['fulfillmentSuggestion', id],
