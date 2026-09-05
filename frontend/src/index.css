@@ -1,0 +1,15 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@500;600;700;800&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "DM Sans", sans-serif;
+  --font-display: "Manrope", sans-serif;
+  --color-ink: #151332;
+  --color-coral: #ff766d;
+}
+
+@layer base {
+  * { box-sizing: border-box; }
+  body { min-width: 320px; min-height: 100vh; margin: 0; color: #1d2433; }
+  button { cursor: pointer; }
+}
