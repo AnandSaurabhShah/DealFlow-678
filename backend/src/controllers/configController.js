@@ -91,6 +91,26 @@ async function createWarehouse(req, res) {
   res.status(201).json({ data: warehouse });
 }
 
+async function restockWarehouse(req, res) {
+  requireFields(req.body, ["productId", "qty"]);
+  const productId = String(req.body.productId);
+  const qty = integer(req.body.qty, "qty", { min: 1 });
+
+  const stockLevel = await prisma.stockLevel.upsert({
+    where: {
+      warehouseId_productId: {
+        warehouseId: req.params.id,
+        productId,
+      },
+    },
+    update: { qty: { increment: qty } },
+    create: { warehouseId: req.params.id, productId, qty },
+    include: { warehouse: true, product: true },
+  });
+
+  res.json({ data: stockLevel });
+}
+
 const tierInclude = { categoryOverrides: true };
 
 async function listDiscountTiers(_req, res) {
@@ -150,6 +170,7 @@ module.exports = {
   listWarehouses,
   getWarehouse,
   createWarehouse,
+  restockWarehouse,
   listDiscountTiers,
   getDiscountTier,
   createDiscountTier,

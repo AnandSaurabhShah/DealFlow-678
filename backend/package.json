@@ -9,6 +9,8 @@
     "test": "node --test",
     "test:smoke": "node scripts/smoke.js",
     "test:mvp2": "node scripts/mvp2-smoke.js",
+    "test:mvp3": "node scripts/mvp3-smoke.js",
+    "test:mvp3-seed": "node scripts/verify-mvp3-seed.js",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:seed": "prisma db seed"

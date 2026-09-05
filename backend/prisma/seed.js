@@ -80,6 +80,26 @@ async function main() {
     tax: "18.00",
     description: "Installation and onboarding at the customer site",
   });
+  const backorderUnit = await prisma.product.upsert({
+    where: { id: "00000000-0000-4000-8000-000000000601" },
+    update: {
+      name: "MVP3 Backorder Demo Unit",
+      category: "Fulfillment Demo",
+      price: "100.00",
+      unit: "unit",
+      tax: "0.00",
+      description: "Dedicated zero-stock product for the MVP 3 restock demonstration",
+    },
+    create: {
+      id: "00000000-0000-4000-8000-000000000601",
+      name: "MVP3 Backorder Demo Unit",
+      category: "Fulfillment Demo",
+      price: "100.00",
+      unit: "unit",
+      tax: "0.00",
+      description: "Dedicated zero-stock product for the MVP 3 restock demonstration",
+    },
+  });
 
   await prisma.priceList.upsert({
     where: { id: "00000000-0000-4000-8000-000000000101" },
@@ -127,6 +147,26 @@ async function main() {
       where: { warehouseId_productId: { warehouseId: westWarehouse.id, productId: laptop.id } },
       update: { qty: 15 },
       create: { warehouseId: westWarehouse.id, productId: laptop.id, qty: 15 },
+    }),
+    prisma.stockLevel.upsert({
+      where: {
+        warehouseId_productId: {
+          warehouseId: warehouse.id,
+          productId: backorderUnit.id,
+        },
+      },
+      update: { qty: 0 },
+      create: { warehouseId: warehouse.id, productId: backorderUnit.id, qty: 0 },
+    }),
+    prisma.stockLevel.upsert({
+      where: {
+        warehouseId_productId: {
+          warehouseId: westWarehouse.id,
+          productId: backorderUnit.id,
+        },
+      },
+      update: { qty: 0 },
+      create: { warehouseId: westWarehouse.id, productId: backorderUnit.id, qty: 0 },
     }),
   ]);
 
@@ -225,8 +265,48 @@ async function main() {
     await seedMvp2Quotation({ ...scenario, repId: rep.id, discountTier: approvalTier });
   }
 
+  const mvp3Scenarios = [
+    {
+      id: "00000000-0000-4000-8000-000000000401",
+      customerName: "MVP3 Single Warehouse Demo",
+      status: "APPROVED",
+      lines: [{ product: laptop, qty: 10, discountPercent: "0.00" }],
+      splits: [],
+    },
+    {
+      id: "00000000-0000-4000-8000-000000000402",
+      customerName: "MVP3 Two Warehouse Split Demo",
+      status: "APPROVED",
+      lines: [{ product: laptop, qty: 30, discountPercent: "0.00" }],
+      splits: [],
+    },
+    {
+      id: "00000000-0000-4000-8000-000000000403",
+      customerName: "MVP3 Insufficient Stock Demo",
+      status: "APPROVED",
+      lines: [{ product: laptop, qty: 50, discountPercent: "0.00" }],
+      splits: [],
+    },
+    {
+      id: "00000000-0000-4000-8000-000000000404",
+      customerName: "MVP3 Awaiting Restock Demo",
+      status: "FULFILLED",
+      lines: [{ product: backorderUnit, qty: 15, discountPercent: "0.00" }],
+      splits: [{
+        warehouse,
+        product: backorderUnit,
+        qtyFulfilled: 5,
+        qtyBackordered: 10,
+      }],
+    },
+  ];
+
+  for (const scenario of mvp3Scenarios) {
+    await seedMvp3Quotation({ ...scenario, repId: rep.id, discountTier: approvalTier });
+  }
+
   console.log(
-    `Seeded demo users, catalog, discount rules, and ${mvp2Scenarios.length} MVP 2 approval scenarios`,
+    `Seeded demo users, catalog, discount rules, ${mvp2Scenarios.length} MVP 2 scenarios, and ${mvp3Scenarios.length} MVP 3 fulfillment scenarios`,
   );
 }
 
@@ -257,6 +337,7 @@ async function seedMvp2Quotation({
   const calculatedRiskScore = calculateBlendedRiskScore(calculatedLines, discountTier);
 
   await prisma.$transaction(async (tx) => {
+    await tx.fulfillmentSplit.deleteMany({ where: { quotationId: id } });
     await tx.approvalLog.deleteMany({ where: { quotationId: id } });
     await tx.quotationLine.deleteMany({ where: { quotationId: id } });
     await tx.quotation.upsert({
@@ -294,6 +375,58 @@ async function seedMvp2Quotation({
           quotationId: id,
           ...log,
           createdAt: new Date(now - (logs.length - index) * 60_000),
+        })),
+      });
+    }
+  });
+}
+
+async function seedMvp3Quotation({
+  id,
+  customerName,
+  repId,
+  status,
+  lines,
+  splits,
+  discountTier,
+}) {
+  const calculatedLines = lines.map((line) => ({
+    productId: line.product.id,
+    product: line.product,
+    qty: line.qty,
+    unitPrice: line.product.price,
+    discountPercent: line.discountPercent,
+  }));
+  const totals = calculateQuotationTotals(calculatedLines);
+  const blendedRiskScore = calculateBlendedRiskScore(calculatedLines, discountTier);
+
+  await prisma.$transaction(async (tx) => {
+    await tx.fulfillmentSplit.deleteMany({ where: { quotationId: id } });
+    await tx.approvalLog.deleteMany({ where: { quotationId: id } });
+    await tx.quotationLine.deleteMany({ where: { quotationId: id } });
+    await tx.quotation.upsert({
+      where: { id },
+      update: { customerName, repId, status, ...totals, blendedRiskScore },
+      create: { id, customerName, repId, status, ...totals, blendedRiskScore },
+    });
+    await tx.quotationLine.createMany({
+      data: calculatedLines.map((line) => ({
+        quotationId: id,
+        productId: line.productId,
+        qty: line.qty,
+        unitPrice: line.unitPrice,
+        discountPercent: line.discountPercent,
+        lineTotal: calculateLineTotal(line).lineTotal,
+      })),
+    });
+    if (splits.length) {
+      await tx.fulfillmentSplit.createMany({
+        data: splits.map((split) => ({
+          quotationId: id,
+          warehouseId: split.warehouse.id,
+          productId: split.product.id,
+          qtyFulfilled: split.qtyFulfilled,
+          qtyBackordered: split.qtyBackordered,
         })),
       });
     }

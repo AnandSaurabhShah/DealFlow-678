@@ -1,6 +1,6 @@
-# DealFlow360 API Contract — MVP 2
+# DealFlow360 API Contract — MVP 3
 
-This contract covers the implemented MVP 1 API and MVP 2 backend Phases 1–2.
+This contract covers the implemented MVP 1–2 API and MVP 3 fulfillment backend.
 
 ## Conventions
 
@@ -8,7 +8,7 @@ This contract covers the implemented MVP 1 API and MVP 2 backend Phases 1–2.
 - Authenticated requests use `Authorization: Bearer <token>`.
 - JSON request header: `Content-Type: application/json`.
 - Roles are `ADMIN`, `REP`, `MANAGER`, or `FINANCE`. Public signup accepts `REP`, `MANAGER`, or `FINANCE` in either upper- or lowercase; admins are system-provisioned. Responses use uppercase roles.
-- Quotation statuses are `DRAFT`, `PENDING_MANAGER_APPROVAL`, `PENDING_FINANCE_APPROVAL`, `APPROVED`, `REJECTED`, and `CONFIRMED`.
+- Quotation statuses are `DRAFT`, `PENDING_MANAGER_APPROVAL`, `PENDING_FINANCE_APPROVAL`, `APPROVED`, `REJECTED`, `CONFIRMED`, and `FULFILLED`.
 - Prisma `Decimal` fields are serialized as JSON strings, for example `"1299"` or `"5"`.
 - Successful config endpoints wrap records in `{ "data": ... }`.
 - All errors use `{ "error": { "code": string, "message": string, "details"?: object } }`.
@@ -21,6 +21,7 @@ Response record shapes:
 - `StockLevel`: `{ id, warehouseId, productId, qty, product }`
 - `DiscountTier`: `{ id, tierName, maxDiscountPercent, createdAt, categoryOverrides }`
 - `CategoryDiscountOverride`: `{ id, discountTierId, category, maxDiscountPercent }`
+- `FulfillmentSplit`: `{ id, quotationId, warehouseId, productId, qtyFulfilled, qtyBackordered, createdAt, warehouse, product }`
 
 IDs are UUID strings and timestamps are ISO-8601 strings. Nullable values such as `description` and `location` are returned as `null` when absent.
 
@@ -106,6 +107,18 @@ Create body (stock is optional):
 ```
 
 Warehouse responses include `stockLevels`, each with its related `product`.
+
+### `POST /api/warehouses/:id/restock`
+
+Requires `ADMIN`. Atomically increments an existing stock level or creates it when the warehouse does not yet stock that product.
+
+Request:
+
+```json
+{ "productId": "<uuid>", "qty": 10 }
+```
+
+`qty` must be a positive integer. The `200` response is `{ "data": StockLevel }` and includes the related `warehouse` and `product`. Unknown warehouse or product IDs return `400 INVALID_REFERENCE`.
 
 ### Discount tiers
 
@@ -214,6 +227,91 @@ Returns the quotation's approval log oldest-to-newest. Reps can read their own q
 
 An unknown quotation returns `404 NOT_FOUND`; a rep requesting another rep's history receives `403 FORBIDDEN`.
 
+## Fulfillment
+
+Fulfillment endpoints require a quotation with status `APPROVED`. They are available to the quotation's owning `REP` and to `ADMIN`. Other roles receive `403 FORBIDDEN`; attempting to fulfill a quotation in another state returns `409 INVALID_QUOTATION_STATUS`.
+
+### `GET /api/quotations/:id/fulfillment/suggest`
+
+Returns a calculated proposal without saving rows or changing stock. Each line is assigned to one warehouse when possible; otherwise it is split across warehouses in descending available-stock order.
+
+`200` response:
+
+```json
+{
+  "data": [
+    {
+      "quotationId": "<uuid>",
+      "warehouseId": "<uuid>",
+      "productId": "<uuid>",
+      "qtyFulfilled": 25,
+      "qtyBackordered": 0,
+      "warehouse": { "id": "<uuid>", "name": "Central Warehouse", "location": "Bengaluru", "createdAt": "<iso-date>" }
+    }
+  ]
+}
+```
+
+When total stock is insufficient, the uncovered quantity appears once as `qtyBackordered`. If no warehouse has a `StockLevel` for a product, the unsaved proposal has `warehouseId: null`, `warehouse: null`, and the full ordered quantity backordered.
+
+### `POST /api/quotations/:id/fulfillment/confirm`
+
+Request body is the accepted suggestion or a manually edited allocation array:
+
+```json
+[
+  { "warehouseId": "<central-uuid>", "productId": "<product-uuid>", "qtyFulfilled": 25 },
+  { "warehouseId": "<west-uuid>", "productId": "<product-uuid>", "qtyFulfilled": 5 }
+]
+```
+
+Every quotation product must have at least one allocation row. A warehouse/product pair may appear only once, and `qtyFulfilled` must be a non-negative integer. The server derives `qtyBackordered`; client-supplied backorder values are ignored.
+
+Confirmation runs atomically: it rechecks current stock, prevents allocation above the ordered quantity, decrements stock, saves `FulfillmentSplit` rows, and changes the quotation status to `FULFILLED`. Any validation or stock failure rolls back all changes.
+
+`200` response is `{ "data": Quotation }`, including `fulfillmentSplits` with related `warehouse` and `product` records.
+
+Relevant errors:
+
+- `400 VALIDATION_ERROR` for a missing/invalid body or quantity.
+- `400 INVALID_FULFILLMENT_SPLIT` for a duplicate pair, an unrelated product, or a missing quotation product allocation.
+- `400 INVALID_REFERENCE` when a warehouse does not exist.
+- `409 FULFILLMENT_OVER_ALLOCATION` when product allocations exceed the ordered quantity.
+- `409 INSUFFICIENT_STOCK` when current warehouse stock cannot cover an allocation.
+- `409 INVALID_QUOTATION_STATUS` unless the quotation is currently `APPROVED`.
+
+### `GET /api/quotations/:id/fulfillment/backorder-check`
+
+Available to the quotation's owning `REP` and to `ADMIN` after fulfillment has been finalized. This endpoint is read-only: it checks current stock and proposes additional allocations for outstanding `qtyBackordered` amounts without changing inventory or persisted fulfillment rows.
+
+`200` response:
+
+```json
+{
+  "data": {
+    "canConsolidate": true,
+    "fullyCoverable": true,
+    "outstandingBackorders": [
+      { "productId": "<uuid>", "qtyBackordered": 10 }
+    ],
+    "suggestedAllocations": [
+      {
+        "quotationId": "<uuid>",
+        "warehouseId": "<uuid>",
+        "productId": "<uuid>",
+        "qtyFulfilled": 10,
+        "qtyBackordered": 0,
+        "warehouse": { "id": "<uuid>", "name": "West Warehouse", "location": "Mumbai", "createdAt": "<iso-date>" }
+      }
+    ]
+  }
+}
+```
+
+`canConsolidate` is true when at least one outstanding unit can now be allocated. `fullyCoverable` is true when current stock covers every outstanding backorder. If stock is only partially available, the suggestion contains the still-uncovered amount in `qtyBackordered`.
+
+Calling this endpoint before the quotation reaches `FULFILLED` returns `409 INVALID_QUOTATION_STATUS`.
+
 ## Shared error statuses
 
 - `400 VALIDATION_ERROR` or `INVALID_REFERENCE`
@@ -223,5 +321,7 @@ An unknown quotation returns `404 NOT_FOUND`; a rep requesting another rep's his
 - `409 CONFLICT` or `EMAIL_IN_USE`
 - `409 QUOTATION_NOT_EDITABLE` or `INVALID_QUOTATION_STATUS`
 - `409 DISCOUNT_TIER_REQUIRED`
+- `409 FULFILLMENT_OVER_ALLOCATION` or `INSUFFICIENT_STOCK`
+- `400 INVALID_FULFILLMENT_SPLIT`
 - `400 EMPTY_QUOTATION`
 - `500 INTERNAL_ERROR`

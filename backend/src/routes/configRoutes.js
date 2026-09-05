@@ -24,6 +24,11 @@ router
   .get(adminOnly, asyncHandler(controller.listWarehouses))
   .post(adminOnly, asyncHandler(controller.createWarehouse));
 router.get("/warehouses/:id", adminOnly, asyncHandler(controller.getWarehouse));
+router.post(
+  "/warehouses/:id/restock",
+  adminOnly,
+  asyncHandler(controller.restockWarehouse),
+);
 router
   .route("/discount-tiers")
   .get(adminOnly, asyncHandler(controller.listDiscountTiers))

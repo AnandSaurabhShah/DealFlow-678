@@ -11,6 +11,11 @@ const {
   getRequiredApproverRole,
   getStatusAfterApproval,
 } = require("../services/approvalService");
+const { proposeFulfillmentSplits } = require("../services/fulfillmentSplitter");
+const {
+  buildBackorderCheck,
+  buildFulfillmentRecords,
+} = require("../services/fulfillmentService");
 
 const quotationInclude = {
   rep: { select: { id: true, name: true, email: true, role: true } },
@@ -22,6 +27,14 @@ const approvalContextInclude = {
   approvalLogs: {
     include: { actor: { select: { id: true, name: true, role: true } } },
     orderBy: { createdAt: "asc" },
+  },
+};
+
+const fulfillmentInclude = {
+  ...quotationInclude,
+  fulfillmentSplits: {
+    include: { warehouse: true, product: true },
+    orderBy: [{ productId: "asc" }, { createdAt: "asc" }],
   },
 };
 
@@ -282,6 +295,197 @@ async function applyApprovalAction({ quotationId, actor, action, reason }) {
   });
 }
 
+async function suggestFulfillment(req, res) {
+  const quotation = await prisma.quotation.findUniqueOrThrow({
+    where: { id: req.params.id },
+    include: quotationInclude,
+  });
+  if (!canManage(req.user, quotation)) {
+    throw new ApiError(403, "FORBIDDEN", "You cannot fulfill another rep's quotation");
+  }
+  assertApprovedForFulfillment(quotation);
+
+  const productIds = quotation.lines.map((line) => line.productId);
+  const stockLevels = await prisma.stockLevel.findMany({
+    where: { productId: { in: productIds } },
+    include: { warehouse: true },
+  });
+  const warehousesById = new Map(
+    stockLevels.map((stock) => [stock.warehouseId, stock.warehouse]),
+  );
+  const suggestion = proposeFulfillmentSplits(quotation, stockLevels).map((split) => ({
+    ...split,
+    warehouse: split.warehouseId ? warehousesById.get(split.warehouseId) : null,
+  }));
+
+  res.json({ data: suggestion });
+}
+
+async function confirmFulfillment(req, res) {
+  const allocations = normalizeFulfillmentAllocations(req.body);
+
+  const fulfilled = await prisma.$transaction(async (tx) => {
+    const quotation = await tx.quotation.findUniqueOrThrow({
+      where: { id: req.params.id },
+      include: { lines: true },
+    });
+    if (!canManage(req.user, quotation)) {
+      throw new ApiError(403, "FORBIDDEN", "You cannot fulfill another rep's quotation");
+    }
+    assertApprovedForFulfillment(quotation);
+
+    const claimed = await tx.quotation.updateMany({
+      where: { id: quotation.id, status: "APPROVED" },
+      data: { status: "FULFILLED" },
+    });
+    if (claimed.count !== 1) {
+      throw new ApiError(
+        409,
+        "INVALID_QUOTATION_STATUS",
+        "This quotation is no longer available for fulfillment",
+      );
+    }
+
+    const records = buildFulfillmentRecords(quotation.lines, allocations);
+    const warehouseIds = [...new Set(records.map((record) => record.warehouseId))];
+    const warehouses = await tx.warehouse.findMany({
+      where: { id: { in: warehouseIds } },
+      select: { id: true },
+    });
+    if (warehouses.length !== warehouseIds.length) {
+      throw new ApiError(
+        400,
+        "INVALID_REFERENCE",
+        "One or more fulfillment warehouses do not exist",
+      );
+    }
+
+    for (const record of records) {
+      if (record.qtyFulfilled === 0) continue;
+      const decremented = await tx.stockLevel.updateMany({
+        where: {
+          warehouseId: record.warehouseId,
+          productId: record.productId,
+          qty: { gte: record.qtyFulfilled },
+        },
+        data: { qty: { decrement: record.qtyFulfilled } },
+      });
+      if (decremented.count !== 1) {
+        throw new ApiError(
+          409,
+          "INSUFFICIENT_STOCK",
+          `Available stock changed for product ${record.productId} at warehouse ${record.warehouseId}`,
+          {
+            productId: record.productId,
+            warehouseId: record.warehouseId,
+            requestedQty: record.qtyFulfilled,
+          },
+        );
+      }
+    }
+
+    await tx.fulfillmentSplit.createMany({
+      data: records.map((record) => ({ ...record, quotationId: quotation.id })),
+    });
+    return tx.quotation.findUnique({
+      where: { id: quotation.id },
+      include: fulfillmentInclude,
+    });
+  });
+
+  res.json({ data: fulfilled });
+}
+
+async function checkFulfillmentBackorder(req, res) {
+  const quotation = await prisma.quotation.findUniqueOrThrow({
+    where: { id: req.params.id },
+    include: {
+      fulfillmentSplits: {
+        where: { qtyBackordered: { gt: 0 } },
+        orderBy: [{ productId: "asc" }, { createdAt: "asc" }],
+      },
+    },
+  });
+  if (!canManage(req.user, quotation)) {
+    throw new ApiError(403, "FORBIDDEN", "You cannot access another rep's fulfillment");
+  }
+  if (quotation.status !== "FULFILLED") {
+    throw new ApiError(
+      409,
+      "INVALID_QUOTATION_STATUS",
+      "Backorders can only be checked after fulfillment is finalized",
+    );
+  }
+
+  const productIds = [...new Set(
+    quotation.fulfillmentSplits.map((split) => split.productId),
+  )];
+  const stockLevels = productIds.length
+    ? await prisma.stockLevel.findMany({
+      where: { productId: { in: productIds } },
+      include: { warehouse: true },
+    })
+    : [];
+  const warehousesById = new Map(
+    stockLevels.map((stock) => [stock.warehouseId, stock.warehouse]),
+  );
+  const result = buildBackorderCheck(
+    quotation.id,
+    quotation.fulfillmentSplits,
+    stockLevels,
+  );
+
+  res.json({
+    data: {
+      ...result,
+      suggestedAllocations: result.suggestedAllocations.map((allocation) => ({
+        ...allocation,
+        warehouse: allocation.warehouseId
+          ? warehousesById.get(allocation.warehouseId)
+          : null,
+      })),
+    },
+  });
+}
+
+function assertApprovedForFulfillment(quotation) {
+  if (quotation.status !== "APPROVED") {
+    throw new ApiError(
+      409,
+      "INVALID_QUOTATION_STATUS",
+      "Only an approved quotation can be fulfilled",
+    );
+  }
+}
+
+function normalizeFulfillmentAllocations(body) {
+  if (!Array.isArray(body) || body.length === 0) {
+    throw new ApiError(
+      400,
+      "VALIDATION_ERROR",
+      "A non-empty array of fulfillment allocations is required",
+    );
+  }
+
+  const allocations = body.map((allocation, index) => {
+    requireFields(allocation, ["warehouseId", "productId", "qtyFulfilled"]);
+    return {
+      warehouseId: String(allocation.warehouseId),
+      productId: String(allocation.productId),
+      qtyFulfilled: integer(allocation.qtyFulfilled, `allocations[${index}].qtyFulfilled`, { min: 0 }),
+    };
+  });
+  const keys = allocations.map(({ warehouseId, productId }) => `${warehouseId}:${productId}`);
+  if (new Set(keys).size !== keys.length) {
+    throw new ApiError(
+      400,
+      "INVALID_FULFILLMENT_SPLIT",
+      "Each warehouse and product pair may appear only once",
+    );
+  }
+  return allocations;
+}
+
 module.exports = {
   listQuotations,
   getQuotation,
@@ -293,4 +497,7 @@ module.exports = {
   approveQuotation,
   rejectQuotation,
   returnQuotation,
+  suggestFulfillment,
+  confirmFulfillment,
+  checkFulfillmentBackorder,
 };

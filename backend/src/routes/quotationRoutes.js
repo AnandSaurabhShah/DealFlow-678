@@ -13,6 +13,21 @@ router.get(
   asyncHandler(controller.listPendingApprovals),
 );
 router.get("/:id/history", asyncHandler(controller.getQuotationHistory));
+router.get(
+  "/:id/fulfillment/suggest",
+  authorize("REP", "ADMIN"),
+  asyncHandler(controller.suggestFulfillment),
+);
+router.post(
+  "/:id/fulfillment/confirm",
+  authorize("REP", "ADMIN"),
+  asyncHandler(controller.confirmFulfillment),
+);
+router.get(
+  "/:id/fulfillment/backorder-check",
+  authorize("REP", "ADMIN"),
+  asyncHandler(controller.checkFulfillmentBackorder),
+);
 router.get("/:id", asyncHandler(controller.getQuotation));
 router.post("/", authorize("REP"), asyncHandler(controller.createQuotation));
 router.put("/:id", authorize("REP", "ADMIN"), asyncHandler(controller.replaceQuotationLines));
