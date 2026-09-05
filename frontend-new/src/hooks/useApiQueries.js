@@ -4,16 +4,21 @@ import { billingApi } from '../api/billing'
 import { quotationApi } from '../api/quotations'
 import { useAuthStore } from '../store/authStore'
 
-export function useProducts() {
-  return useQuery({ queryKey: ['products'], queryFn: configApi.listProducts })
+export function useProducts({ page = 1, pageSize = 20 } = {}) {
+  return useQuery({
+    queryKey: ['products', page, pageSize],
+    queryFn: () => configApi.listProducts({ page, pageSize }),
+    placeholderData: previousData => previousData,
+  })
 }
 
-export function useQuotations() {
+export function useQuotations({ page = 1, pageSize = 20, status } = {}) {
   const userId = useAuthStore(state => state.user?.id)
   return useQuery({
-    queryKey: ['quotations', userId],
-    queryFn: quotationApi.list,
+    queryKey: ['quotations', userId, page, pageSize, status || 'ALL'],
+    queryFn: () => quotationApi.list({ page, pageSize, ...(status ? { status } : {}) }),
     enabled: Boolean(userId),
+    placeholderData: previousData => previousData,
   })
 }
 
@@ -25,12 +30,13 @@ export function useQuotation(id) {
   })
 }
 
-export function usePendingApprovals() {
+export function usePendingApprovals({ page = 1, pageSize = 20, quotationId } = {}) {
   const user = useAuthStore(state => state.user)
   return useQuery({
-    queryKey: ['pendingApprovals', user?.id],
-    queryFn: quotationApi.pending,
+    queryKey: ['pendingApprovals', user?.id, page, pageSize, quotationId || 'ALL'],
+    queryFn: () => quotationApi.pending({ page, pageSize, ...(quotationId ? { quotationId } : {}) }),
     enabled: Boolean(user?.id && ['MANAGER', 'FINANCE'].includes(user.role)),
+    placeholderData: previousData => previousData,
   })
 }
 
@@ -87,8 +93,8 @@ export function useNegotiationThread(id, enabled = true) {
 export function useSendToCustomer() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: ({ id, customerId }) => quotationApi.sendToCustomer(id, customerId),
-    onSuccess: quotation => {
+    mutationFn: ({ id, customerId, customerEmail }) => quotationApi.sendToCustomer(id, { customerId, customerEmail }),
+    onSuccess: ({ quotation }) => {
       queryClient.setQueryData(['quotation', quotation.id], quotation)
       queryClient.invalidateQueries({ queryKey: ['quotations'] })
       queryClient.invalidateQueries({ queryKey: ['negotiationThread', quotation.id] })
@@ -194,12 +200,12 @@ export function usePayInvoice() {
   })
 }
 
-export function useAdminConfig() {
+export function useAdminConfig(active = 'products', page = 1, pageSize = 20) {
   const isAdmin = useAuthStore(state => state.user?.role === 'ADMIN')
   return {
-    products: useQuery({ queryKey: ['products'], queryFn: configApi.listProducts, enabled: isAdmin }),
-    priceLists: useQuery({ queryKey: ['priceLists'], queryFn: configApi.listPriceLists, enabled: isAdmin }),
-    warehouses: useQuery({ queryKey: ['warehouses'], queryFn: configApi.listWarehouses, enabled: isAdmin }),
-    discountTiers: useQuery({ queryKey: ['discountTiers'], queryFn: configApi.listDiscountTiers, enabled: isAdmin }),
+    products: useQuery({ queryKey: ['products', page, pageSize], queryFn: () => configApi.listProducts({ page, pageSize }), enabled: isAdmin && active === 'products', placeholderData: previousData => previousData }),
+    priceLists: useQuery({ queryKey: ['priceLists', page, pageSize], queryFn: () => configApi.listPriceLists({ page, pageSize }), enabled: isAdmin && active === 'priceLists', placeholderData: previousData => previousData }),
+    warehouses: useQuery({ queryKey: ['warehouses', page, pageSize], queryFn: () => configApi.listWarehouses({ page, pageSize }), enabled: isAdmin && active === 'warehouses', placeholderData: previousData => previousData }),
+    discountTiers: useQuery({ queryKey: ['discountTiers', page, pageSize], queryFn: () => configApi.listDiscountTiers({ page, pageSize }), enabled: isAdmin && active === 'discountTiers', placeholderData: previousData => previousData }),
   }
 }

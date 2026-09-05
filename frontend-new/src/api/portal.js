@@ -12,6 +12,10 @@ export const customerAuthApi = {
 }
 
 export const portalApi = {
+  async listQuotations(params) {
+    const { data } = await portalClient.get('/api/portal/quotations', { params })
+    return { items: data.data, pagination: data.pagination }
+  },
   async getQuotation(id) {
     const { data } = await portalClient.get(`/api/portal/quotations/${id}`)
     return data.data

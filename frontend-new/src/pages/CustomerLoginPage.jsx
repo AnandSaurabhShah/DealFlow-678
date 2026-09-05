@@ -1,6 +1,7 @@
 import { useMutation } from '@tanstack/react-query'
 import { useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
+import { toast } from 'sonner'
 import { customerAuthApi } from '../api/portal'
 import { getApiError } from '../api/client'
 import Brand from '../components/Brand'
@@ -17,7 +18,10 @@ export default function CustomerLoginPage() {
   const mode = location.pathname.endsWith('/signup') ? 'signup' : 'login'
   const auth = useMutation({
     mutationFn: values => mode === 'login' ? customerAuthApi.login(values) : customerAuthApi.signup(values),
-    onSuccess: setSession,
+    onSuccess: session => {
+      setSession(session)
+      toast.success(mode === 'login' ? 'Signed in to the customer portal.' : 'Customer account created successfully.')
+    },
   })
   const update = event => setForm(current => ({ ...current, [event.target.name]: event.target.value }))
   const submit = event => { event.preventDefault(); auth.mutate(form) }

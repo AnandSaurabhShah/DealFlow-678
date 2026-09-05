@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
+import { toast } from 'sonner'
 import { getApiError } from '../api/client'
 import Icon from '../components/Icon'
 import NegotiationThread from '../components/NegotiationThread'
@@ -29,13 +30,21 @@ export default function CustomerQuotationPage() {
     setNotice('')
     const discountPercent = discounts[line.id] ?? String(line.discountPercent)
     updateDiscount.mutate({ id: quote.id, lineId: line.id, discountPercent }, {
-      onSuccess: () => setNotice(`Discount request submitted for ${line.product.name}. Confirm the quotation when all requested terms are ready.`),
+      onSuccess: () => {
+        const message = `Discount request submitted for ${line.product.name}. Confirm the quotation when all requested terms are ready.`
+        setNotice(message)
+        toast.success('Discount request saved.')
+      },
     })
   }
   const confirmQuotation = () => {
     setNotice('')
     confirm.mutate(quote.id, {
-      onSuccess: updated => setNotice(['PENDING_MANAGER_APPROVAL', 'PENDING_FINANCE_APPROVAL'].includes(updated.status) ? 'Your request is being reviewed.' : 'Quotation confirmed. Your updated terms are approved.'),
+      onSuccess: updated => {
+        const message = ['PENDING_MANAGER_APPROVAL', 'PENDING_FINANCE_APPROVAL'].includes(updated.status) ? 'Your request is being reviewed.' : 'Quotation confirmed. Your updated terms are approved.'
+        setNotice(message)
+        toast.success(message)
+      },
     })
   }
 
@@ -55,7 +64,7 @@ export default function CustomerQuotationPage() {
     {notice && <p role="status" className="rounded-xl bg-emerald-50 p-4 text-xs text-emerald-800">{notice}</p>}
     {mutationError && <p role="alert" className="rounded-xl bg-red-50 p-4 text-xs text-red-700">{getApiError(mutationError, 'Unable to update the quotation')}</p>}
     <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_320px]">
-      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6"><p className="text-[9px] font-bold tracking-widest text-slate-400">SHARED CONVERSATION</p><h2 className="mb-5 mt-1 font-display text-lg font-bold">Comments</h2><NegotiationThread comments={quote.comments} lines={quote.lines} currentAuthorType="CUSTOMER" disabled={!canEdit} isSubmitting={addComment.isPending} onSubmit={(body, done) => addComment.mutate({ id: quote.id, ...body }, { onSuccess: done })} /></section>
+      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6"><p className="text-[9px] font-bold tracking-widest text-slate-400">SHARED CONVERSATION</p><h2 className="mb-5 mt-1 font-display text-lg font-bold">Comments</h2><NegotiationThread comments={quote.comments} lines={quote.lines} currentAuthorType="CUSTOMER" disabled={!canEdit} isSubmitting={addComment.isPending} onSubmit={(body, done) => addComment.mutate({ id: quote.id, ...body }, { onSuccess: () => { done(); toast.success('Comment sent to your representative.') } })} /></section>
       <aside className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><p className="text-[9px] font-bold tracking-widest text-slate-400">FINAL STEP</p><h2 className="mt-1 font-display text-lg font-bold">Confirm quotation</h2><p className="mt-2 text-xs leading-relaxed text-slate-500">Discount requests above update the proposed terms. Confirmation submits the complete quotation for final governance review.</p><button disabled={!canEdit || confirm.isPending} onClick={confirmQuotation} className="mt-5 flex w-full items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 py-3 text-xs font-semibold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-40"><Icon name="check" size={16} />{confirm.isPending ? 'Confirming…' : 'Confirm quotation'}</button>{!canEdit && <p className="mt-3 text-center text-[10px] text-slate-400">Terms are locked while this quotation is in its current state.</p>}</aside>
     </div>
   </div>

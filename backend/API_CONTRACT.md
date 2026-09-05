@@ -15,6 +15,22 @@ This contract covers the implemented MVP 1–4 APIs and MVP 5 customer-negotiati
 - Successful config endpoints wrap records in `{ "data": ... }`.
 - All errors use `{ "error": { "code": string, "message": string, "details"?: object } }`.
 
+Collection endpoints accept `page` and `pageSize` query parameters. Both must be positive integers, `pageSize` defaults to `20`, and the maximum is `100`. Paginated responses use:
+
+```json
+{
+  "data": [],
+  "pagination": {
+    "page": 1,
+    "pageSize": 20,
+    "total": 150,
+    "totalPages": 8,
+    "hasNextPage": true,
+    "hasPreviousPage": false
+  }
+}
+```
+
 Response record shapes:
 
 - `Product`: `{ id, name, category, price, unit, tax, description, billingType, billingCycle, createdAt }`
@@ -78,7 +94,7 @@ Every endpoint in this section requires authentication. Mutating endpoints and a
 
 ### Products
 
-- `GET /api/products` → `200 { "data": Product[] }` (any authenticated role)
+- `GET /api/products?page=1&pageSize=20` → paginated `Product[]` (any authenticated role)
 - `GET /api/products/:id` → `200 { "data": Product }` (any authenticated role)
 - `POST /api/products` → `201 { "data": Product }`
 
@@ -92,7 +108,7 @@ Create body:
 
 ### Price lists
 
-- `GET /api/pricelists` → `200 { "data": PriceList[] }`
+- `GET /api/pricelists?page=1&pageSize=20` → paginated `PriceList[]`
 - `GET /api/pricelists/:id` → `200 { "data": PriceList }`
 - `POST /api/pricelists` → `201 { "data": PriceList }`
 
@@ -100,7 +116,7 @@ Create body: `{ "name": "Gold USD", "customerTier": "GOLD", "currency": "USD" }`
 
 ### Warehouses
 
-- `GET /api/warehouses` → `200 { "data": Warehouse[] }`
+- `GET /api/warehouses?page=1&pageSize=20` → paginated `Warehouse[]`
 - `GET /api/warehouses/:id` → `200 { "data": Warehouse }`
 - `POST /api/warehouses` → `201 { "data": Warehouse }`
 
@@ -126,7 +142,7 @@ Request:
 
 ### Discount tiers
 
-- `GET /api/discount-tiers` → `200 { "data": DiscountTier[] }`
+- `GET /api/discount-tiers?page=1&pageSize=20` → paginated `DiscountTier[]`
 - `GET /api/discount-tiers/:id` → `200 { "data": DiscountTier }`
 - `POST /api/discount-tiers` → `201 { "data": DiscountTier }`
 
@@ -146,7 +162,7 @@ Create body:
 
 All quotation routes require authentication. A `REP` sees only their own quotations; `ADMIN`, `MANAGER`, and `FINANCE` can read all quotations. Creation is restricted to `REP`; editing and confirmation are restricted to the owning rep or an admin.
 
-- `GET /api/quotations` → `{ "data": Quotation[] }`
+- `GET /api/quotations?page=1&pageSize=20&status=APPROVED` → paginated `Quotation[]`. `status` is optional and accepts one status or a comma-separated list.
 - `GET /api/quotations/:id` → `{ "data": Quotation }`
 - `POST /api/quotations`, body `{ "customerName": string }` → draft quotation; `repId` comes from the token.
 - `PUT /api/quotations/:id`, body `{ "lines": [{ "productId": string, "qty": integer, "discountPercent": decimal }] }` → replaces lines and returns server-recomputed totals.
@@ -185,7 +201,7 @@ All approval endpoints require authentication. Action endpoints allow `MANAGER` 
 
 ### `GET /api/quotations/pending`
 
-Returns `200 { "data": Quotation[] }`. Managers receive manager-first work, including high-risk quotes that will subsequently need Finance. Finance receives high-risk quotes only after Manager approval. Other roles receive `403 FORBIDDEN`.
+Accepts `page` and `pageSize` and returns a paginated quotation collection. Managers receive manager-first work, including high-risk quotes that will subsequently need Finance. Finance receives high-risk quotes only after Manager approval. Other roles receive `403 FORBIDDEN`. `quotationId` is an optional exact lookup used by the approval detail screen to verify its assignment without loading the entire queue.
 
 ### `POST /api/quotations/:id/approve`
 
@@ -465,9 +481,11 @@ These routes require an internal JWT. A customer token returns `401 UNAUTHENTICA
 
 ### `POST /api/quotations/:id/send-to-customer` — INTERNAL: REP, MANAGER, ADMIN
 
-Request: `{ "customerId": "<uuid>" }`
+Request: either `{ "customerId": "<uuid>" }`, `{ "customerEmail": "customer@example.test" }`, or `{}` when the quotation already has a linked customer.
 
-The owning REP, a MANAGER, or ADMIN can send an `APPROVED` quotation. When `customerId` is omitted, the quotation's existing customer is used. The endpoint links the customer, records access time and an audit event, and changes status to `SENT_TO_CUSTOMER`.
+The owning REP, a MANAGER, or ADMIN can send an `APPROVED` quotation. The endpoint resolves the linked customer by ID or portal-account email, records access time and an audit event, changes status to `SENT_TO_CUSTOMER`, and sends the customer a direct portal link through configured SMTP.
+
+Returns `{ "data": { ...quotation }, "emailDelivery": { "status": "SENT", "messageId": "..." } }`. Email status can be `SKIPPED` when SMTP is not configured or `FAILED` when the SMTP provider rejects delivery; the quotation remains available in the customer's portal in either case.
 
 A REP cannot send another REP's quotation. A quotation with generated invoices or schedules cannot enter negotiation because customer changes would invalidate billing.
 
@@ -486,6 +504,10 @@ Returns the created comment with `201`. The quotation must already have been sen
 ## MVP 5 customer portal routes
 
 All `/api/portal/*` routes require a customer JWT. Queries are scoped by both quotation ID and authenticated `customerId`; inaccessible quotations return `404 CUSTOMER_QUOTATION_NOT_FOUND` to prevent record enumeration. Internal JWTs return `401 CUSTOMER_UNAUTHENTICATED`.
+
+### `GET /api/portal/quotations` — CUSTOMER ONLY
+
+Accepts `page` and `pageSize` and returns the authenticated customer's shared quotations as a paginated collection, newest activity first. Each item contains safe summary fields, totals, timestamps, and line/comment counts. Customers never need to enter or share a quotation ID manually.
 
 ### `GET /api/portal/quotations/:id` — CUSTOMER ONLY
 

@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
+import { toast } from 'sonner'
 import BackorderAvailability from '../components/BackorderAvailability'
 import FulfillmentPlanTable from '../components/FulfillmentPlanTable'
 import FulfillmentSummary from '../components/FulfillmentSummary'
@@ -80,7 +81,9 @@ export default function FulfillmentPage() {
       onSuccess: () => {
         setManualMode(false)
         setValidationError('')
-        setNotice('Fulfillment confirmed. Inventory and quotation status were updated by the server.')
+        const message = 'Fulfillment confirmed. Inventory and quotation status were updated by the server.'
+        setNotice(message)
+        toast.success(message)
       },
     })
   }

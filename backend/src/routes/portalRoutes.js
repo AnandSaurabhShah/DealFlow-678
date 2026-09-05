@@ -7,6 +7,7 @@ const asyncHandler = require("../utils/asyncHandler");
 const router = express.Router();
 
 router.use(authenticateCustomer);
+router.get("/quotations", asyncHandler(controller.listPortalQuotations));
 router.get("/quotations/:id", asyncHandler(controller.getPortalQuotation));
 router.post(
   "/quotations/:id/comments",

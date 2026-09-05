@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
+import { toast } from 'sonner'
 import ApprovalChain from '../components/ApprovalChain'
 import ApprovalDecisionDialog from '../components/ApprovalDecisionDialog'
 import ApprovalHistory from '../components/ApprovalHistory'
@@ -17,7 +18,7 @@ export default function ApprovalDetailPage() {
   const user = useAuthStore(state => state.user)
   const quotation = useQuotation(quotationId)
   const history = useApprovalHistory(quotationId)
-  const pending = usePendingApprovals()
+  const pending = usePendingApprovals({ quotationId })
   const negotiation = useNegotiationThread(quotationId, Boolean(quotation.data?.sentToCustomerAt))
   const negotiationComment = useInternalNegotiationComment()
   const approve = useApproveQuotation()
@@ -34,14 +35,18 @@ export default function ApprovalDetailPage() {
   const canManageFulfillment = user.role === 'ADMIN' || (user.role === 'REP' && quote.repId === user.id)
   const showFulfillmentAction = canManageFulfillment && ['APPROVED', 'FULFILLED'].includes(quote.status)
   const showBillingAction = showFulfillmentAction
-  const assignedToUser = isReviewer && pending.isSuccess && pending.data.some(item => item.id === quote.id)
+  const assignedToUser = isReviewer && pending.isSuccess && pending.data.items.some(item => item.id === quote.id)
   const mutations = [approve, reject, returnForRevision]
   const activeMutation = mutations.find(mutation => mutation.isPending)
   const mutationError = mutations.find(mutation => mutation.isError)?.error
 
   const approveQuote = () => {
     setNotice('')
-    approve.mutate(quote.id, { onSuccess: updated => setNotice(updated.status === 'PENDING_FINANCE_APPROVAL' ? 'Manager approval recorded. The quotation now requires Finance approval.' : 'Quotation approved.') })
+    approve.mutate(quote.id, { onSuccess: updated => {
+      const message = updated.status === 'PENDING_FINANCE_APPROVAL' ? 'Manager approval recorded. The quotation now requires Finance approval.' : 'Quotation approved.'
+      setNotice(message)
+      toast.success(message)
+    } })
   }
   const submitReason = reason => {
     setNotice('')
@@ -49,7 +54,9 @@ export default function ApprovalDetailPage() {
     mutation.mutate({ id: quote.id, reason }, {
       onSuccess: updated => {
         setDialog(null)
-        setNotice(updated.status === 'DRAFT' ? 'Quotation returned to the sales rep for revision.' : 'Quotation rejected.')
+        const message = updated.status === 'DRAFT' ? 'Quotation returned to the sales rep for revision.' : 'Quotation rejected.'
+        setNotice(message)
+        toast.success(message)
       },
     })
   }
@@ -90,7 +97,7 @@ export default function ApprovalDetailPage() {
     </div>
 
     {quote.sentToCustomerAt && <Card title="Customer conversation" eyebrow="SHARED NEGOTIATION THREAD">
-      {negotiation.isLoading ? <div className="h-40 animate-pulse rounded-lg bg-slate-100" /> : negotiation.isError ? <p role="alert" className="text-xs text-red-600">{approvalErrorMessage(negotiation.error, 'Unable to load customer comments')}</p> : <NegotiationThread comments={negotiation.data.comments} lines={quote.lines} currentAuthorType="INTERNAL" disabled={user.role === 'FINANCE'} isSubmitting={negotiationComment.isPending} onSubmit={(body, done) => negotiationComment.mutate({ id: quote.id, ...body }, { onSuccess: done })} />}
+      {negotiation.isLoading ? <div className="h-40 animate-pulse rounded-lg bg-slate-100" /> : negotiation.isError ? <p role="alert" className="text-xs text-red-600">{approvalErrorMessage(negotiation.error, 'Unable to load customer comments')}</p> : <NegotiationThread comments={negotiation.data.comments} lines={quote.lines} currentAuthorType="INTERNAL" disabled={user.role === 'FINANCE'} isSubmitting={negotiationComment.isPending} onSubmit={(body, done) => negotiationComment.mutate({ id: quote.id, ...body }, { onSuccess: () => { done(); toast.success('Reply sent to the customer.') } })} />}
       {negotiationComment.isError && <p role="alert" className="mt-3 rounded-lg bg-red-50 p-3 text-xs text-red-700">{approvalErrorMessage(negotiationComment.error, 'Unable to send comment')}</p>}
       {user.role === 'FINANCE' && <p className="mt-3 text-[10px] text-slate-400">Finance access is read-only for customer conversations.</p>}
     </Card>}

@@ -1,6 +1,6 @@
 const prisma = require("../config/prisma");
 const ApiError = require("../utils/apiError");
-const { requireFields, decimalString, integer } = require("../utils/validation");
+const { requireFields, decimalString, integer, uuid } = require("../utils/validation");
 const {
   calculateLineTotal,
   calculateQuotationTotals,
@@ -11,6 +11,7 @@ const {
   getStatusAfterApproval,
 } = require("../services/approvalService");
 const { proposeFulfillmentSplits } = require("../services/fulfillmentSplitter");
+const { parsePagination, paginationMeta } = require("../utils/pagination");
 const {
   buildBackorderCheck,
   buildFulfillmentRecords,
@@ -29,6 +30,24 @@ const approvalContextInclude = {
   },
 };
 
+const quotationSummarySelect = {
+  id: true,
+  customerName: true,
+  repId: true,
+  customerId: true,
+  status: true,
+  subtotal: true,
+  totalDiscount: true,
+  grandTotal: true,
+  blendedRiskScore: true,
+  approvalRound: true,
+  sentToCustomerAt: true,
+  createdAt: true,
+  updatedAt: true,
+  rep: { select: { id: true, name: true, email: true, role: true } },
+  _count: { select: { lines: true } },
+};
+
 const fulfillmentInclude = {
   ...quotationInclude,
   fulfillmentSplits: {
@@ -36,6 +55,27 @@ const fulfillmentInclude = {
     orderBy: [{ productId: "asc" }, { createdAt: "asc" }],
   },
 };
+
+const QUOTATION_STATUSES = new Set([
+  "DRAFT",
+  "PENDING_MANAGER_APPROVAL",
+  "PENDING_FINANCE_APPROVAL",
+  "APPROVED",
+  "REJECTED",
+  "CONFIRMED",
+  "FULFILLED",
+  "SENT_TO_CUSTOMER",
+  "UNDER_NEGOTIATION",
+]);
+
+function statusFilter(value) {
+  if (!value) return undefined;
+  const statuses = String(value).split(",").map((status) => status.trim().toUpperCase()).filter(Boolean);
+  if (!statuses.length || statuses.some((status) => !QUOTATION_STATUSES.has(status))) {
+    throw new ApiError(400, "VALIDATION_ERROR", "status contains an unsupported quotation status");
+  }
+  return statuses.length === 1 ? statuses[0] : { in: statuses };
+}
 
 function canManage(user, quotation) {
   return user.role === "ADMIN" || quotation.repId === user.id;
@@ -48,13 +88,22 @@ function assertCanView(user, quotation) {
 }
 
 async function listQuotations(req, res) {
-  const where = req.user.role === "REP" ? { repId: req.user.id } : {};
-  const quotations = await prisma.quotation.findMany({
-    where,
-    include: quotationInclude,
-    orderBy: { updatedAt: "desc" },
-  });
-  res.json({ data: quotations });
+  const pagination = parsePagination(req.query);
+  const where = {
+    ...(req.user.role === "REP" ? { repId: req.user.id } : {}),
+    ...(req.query.status ? { status: statusFilter(req.query.status) } : {}),
+  };
+  const [quotations, total] = await Promise.all([
+    prisma.quotation.findMany({
+      where,
+      select: quotationSummarySelect,
+      orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
+      skip: pagination.skip,
+      take: pagination.take,
+    }),
+    prisma.quotation.count({ where }),
+  ]);
+  res.json({ data: quotations, pagination: paginationMeta(total, pagination) });
 }
 
 async function getQuotation(req, res) {
@@ -193,17 +242,36 @@ async function confirmQuotation(req, res) {
 }
 
 async function listPendingApprovals(req, res) {
-  const pending = await prisma.quotation.findMany({
+  const pagination = parsePagination(req.query);
+  const quotationId = req.query.quotationId
+    ? uuid(req.query.quotationId, "quotationId")
+    : undefined;
+  const candidates = await prisma.quotation.findMany({
     where: {
       status: { in: ["PENDING_MANAGER_APPROVAL", "PENDING_FINANCE_APPROVAL"] },
+      ...(quotationId ? { id: quotationId } : {}),
     },
-    include: approvalContextInclude,
-    orderBy: { updatedAt: "asc" },
+    select: {
+      id: true,
+      status: true,
+      approvalRound: true,
+      approvalLogs: {
+        where: { action: "APPROVED" },
+        select: { approvalRound: true, action: true, actor: { select: { role: true } } },
+      },
+    },
+    orderBy: [{ updatedAt: "asc" }, { id: "asc" }],
   });
-  const data = pending
+  const assignedIds = candidates
     .filter((quotation) => getRequiredApproverRole(quotation) === req.user.role)
-    .map(({ approvalLogs: _approvalLogs, ...quotation }) => quotation);
-  res.json({ data });
+    .map((quotation) => quotation.id);
+  const pageIds = assignedIds.slice(pagination.skip, pagination.skip + pagination.take);
+  const records = pageIds.length
+    ? await prisma.quotation.findMany({ where: { id: { in: pageIds } }, select: quotationSummarySelect })
+    : [];
+  const recordsById = new Map(records.map((quotation) => [quotation.id, quotation]));
+  const data = pageIds.map((id) => recordsById.get(id));
+  res.json({ data, pagination: paginationMeta(assignedIds.length, pagination) });
 }
 
 async function approveQuotation(req, res) {

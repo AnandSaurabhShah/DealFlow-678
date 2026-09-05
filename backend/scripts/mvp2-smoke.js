@@ -82,8 +82,8 @@ async function main() {
   expect(moderate.status === "PENDING_MANAGER_APPROVAL", "PS example did not route to Manager");
   expect(Number(moderate.blendedRiskScore) === 8, "PS example risk score was not 8");
 
-  const managerPending = await request("/api/quotations/pending", { headers: auth(managerToken) });
-  const financePendingBefore = await request("/api/quotations/pending", { headers: auth(financeToken) });
+  const managerPending = await request(`/api/quotations/pending?quotationId=${moderate.id}`, { headers: auth(managerToken) });
+  const financePendingBefore = await request(`/api/quotations/pending?quotationId=${moderate.id}`, { headers: auth(financeToken) });
   expect(managerPending.body.data.some((quote) => quote.id === moderate.id), "Manager cannot see pending quote");
   expect(!financePendingBefore.body.data.some((quote) => quote.id === moderate.id), "Finance saw manager-only quote");
 
@@ -106,7 +106,7 @@ async function main() {
     `MVP2 high ${Date.now()}`,
   );
   expect(high.status === "PENDING_FINANCE_APPROVAL", "High risk did not route toward Finance");
-  const financeBeforeManager = await request("/api/quotations/pending", { headers: auth(financeToken) });
+  const financeBeforeManager = await request(`/api/quotations/pending?quotationId=${high.id}`, { headers: auth(financeToken) });
   expect(!financeBeforeManager.body.data.some((quote) => quote.id === high.id), "Finance saw high risk before Manager");
 
   const highManagerApproval = await request(`/api/quotations/${high.id}/approve`, {
@@ -114,7 +114,7 @@ async function main() {
     headers: auth(managerToken),
   });
   expect(highManagerApproval.body.data.status === "PENDING_FINANCE_APPROVAL", "High risk skipped Finance");
-  const financeAfterManager = await request("/api/quotations/pending", { headers: auth(financeToken) });
+  const financeAfterManager = await request(`/api/quotations/pending?quotationId=${high.id}`, { headers: auth(financeToken) });
   expect(financeAfterManager.body.data.some((quote) => quote.id === high.id), "Finance cannot see manager-approved high risk");
 
   const financeApproval = await request(`/api/quotations/${high.id}/approve`, {

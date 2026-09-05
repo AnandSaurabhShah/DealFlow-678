@@ -1,8 +1,8 @@
 import apiClient from './client'
 
-async function list(path) {
-  const { data } = await apiClient.get(path)
-  return data.data
+async function list(path, params) {
+  const { data } = await apiClient.get(path, { params })
+  return { items: data.data, pagination: data.pagination }
 }
 
 async function create(path, body) {
@@ -11,12 +11,12 @@ async function create(path, body) {
 }
 
 export const configApi = {
-  listProducts: () => list('/api/products'),
+  listProducts: params => list('/api/products', params),
   createProduct: body => create('/api/products', body),
-  listPriceLists: () => list('/api/pricelists'),
+  listPriceLists: params => list('/api/pricelists', params),
   createPriceList: body => create('/api/pricelists', body),
-  listWarehouses: () => list('/api/warehouses'),
+  listWarehouses: params => list('/api/warehouses', params),
   createWarehouse: body => create('/api/warehouses', body),
-  listDiscountTiers: () => list('/api/discount-tiers'),
+  listDiscountTiers: params => list('/api/discount-tiers', params),
   createDiscountTier: body => create('/api/discount-tiers', body),
 }

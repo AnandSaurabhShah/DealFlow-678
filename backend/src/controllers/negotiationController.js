@@ -4,6 +4,8 @@ const ApiError = require("../utils/apiError");
 const { decimalString, requireFields, uuid } = require("../utils/validation");
 const { calculateLineTotal, calculateQuotationTotals } = require("../services/quotationCalculator");
 const { evaluateGovernance } = require("../services/governanceService");
+const { sendQuotationEmail } = require("../services/quotationMailer");
+const { parsePagination, paginationMeta } = require("../utils/pagination");
 const {
   shapeComment,
   shapeInternalEvent,
@@ -116,15 +118,32 @@ async function sendToCustomer(req, res) {
     }
 
     const requestedCustomerId = req.body?.customerId || quotation.customerId;
-    if (!requestedCustomerId) {
-      throw new ApiError(400, "CUSTOMER_REQUIRED", "customerId is required before sending a quotation");
+    const requestedCustomerEmail = req.body?.customerEmail
+      ? String(req.body.customerEmail).trim().toLowerCase()
+      : null;
+    if (!requestedCustomerId && !requestedCustomerEmail) {
+      throw new ApiError(
+        400,
+        "CUSTOMER_REQUIRED",
+        "A linked customer, customerId, or customerEmail is required before sending a quotation",
+      );
     }
-    const customerId = uuid(requestedCustomerId, "customerId");
+    if (requestedCustomerEmail && !/^\S+@\S+\.\S+$/.test(requestedCustomerEmail)) {
+      throw new ApiError(400, "VALIDATION_ERROR", "customerEmail must be a valid email address");
+    }
     const customer = await tx.customer.findUnique({
-      where: { id: customerId },
+      where: requestedCustomerId
+        ? { id: uuid(requestedCustomerId, "customerId") }
+        : { email: requestedCustomerEmail },
       select: { id: true, name: true, email: true },
     });
-    if (!customer) throw new ApiError(400, "INVALID_REFERENCE", "Customer does not exist");
+    if (!customer) {
+      throw new ApiError(
+        400,
+        "INVALID_REFERENCE",
+        "No customer portal account exists for that customer",
+      );
+    }
 
     const now = new Date();
     const updated = await tx.quotation.update({
@@ -153,7 +172,32 @@ async function sendToCustomer(req, res) {
     console.info("[negotiation] quotation sent", { quotationId: quotation.id, actorId: req.user.id });
     return updated;
   });
-  res.json({ data: sent });
+  const emailDelivery = await sendQuotationEmail({ customer: sent.customer, quotation: sent });
+  res.json({ data: sent, emailDelivery });
+}
+
+async function listPortalQuotations(req, res) {
+  const pagination = parsePagination(req.query);
+  const where = { customerId: req.customer.id, sentToCustomerAt: { not: null } };
+  const [quotations, total] = await Promise.all([
+    prisma.quotation.findMany({
+      where,
+      select: {
+        id: true,
+        customerName: true,
+        status: true,
+        grandTotal: true,
+        sentToCustomerAt: true,
+        updatedAt: true,
+        _count: { select: { lines: true, negotiationComments: true } },
+      },
+      orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
+      skip: pagination.skip,
+      take: pagination.take,
+    }),
+    prisma.quotation.count({ where }),
+  ]);
+  res.json({ data: quotations, pagination: paginationMeta(total, pagination) });
 }
 
 async function getPortalQuotation(req, res) {
@@ -356,6 +400,7 @@ async function createInternalComment(req, res) {
 
 module.exports = {
   sendToCustomer,
+  listPortalQuotations,
   getPortalQuotation,
   createCustomerComment,
   updateCustomerDiscount,

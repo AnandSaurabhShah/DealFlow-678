@@ -16,6 +16,7 @@
     "test:mvp5": "node scripts/mvp5-smoke.js",
     "test:mvp5-seed": "node scripts/verify-mvp5-seed.js",
     "test:seed": "node scripts/verify-final-seed.js",
+    "test:pagination": "node scripts/pagination-smoke.js",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:seed": "prisma db seed"
@@ -33,6 +34,7 @@
     "express": "^5.2.1",
     "express-rate-limit": "^8.7.0",
     "jsonwebtoken": "^9.0.3",
+    "nodemailer": "^10.0.0",
     "pg": "^8.16.3",
     "prisma": "^7.10.0"
   },

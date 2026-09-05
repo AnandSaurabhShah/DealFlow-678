@@ -1,9 +1,9 @@
 import apiClient from './client'
 
 export const quotationApi = {
-  async list() {
-    const { data } = await apiClient.get('/api/quotations')
-    return data.data
+  async list(params) {
+    const { data } = await apiClient.get('/api/quotations', { params })
+    return { items: data.data, pagination: data.pagination }
   },
   async get(id) {
     const { data } = await apiClient.get(`/api/quotations/${id}`)
@@ -21,9 +21,9 @@ export const quotationApi = {
     const { data } = await apiClient.post(`/api/quotations/${id}/confirm`)
     return data.data
   },
-  async pending() {
-    const { data } = await apiClient.get('/api/quotations/pending')
-    return data.data
+  async pending(params) {
+    const { data } = await apiClient.get('/api/quotations/pending', { params })
+    return { items: data.data, pagination: data.pagination }
   },
   async history(id) {
     const { data } = await apiClient.get(`/api/quotations/${id}/history`)
@@ -53,10 +53,10 @@ export const quotationApi = {
     const { data } = await apiClient.get(`/api/quotations/${id}/fulfillment/backorder-check`)
     return data.data
   },
-  async sendToCustomer(id, customerId) {
-    const body = customerId ? { customerId } : {}
+  async sendToCustomer(id, { customerId, customerEmail } = {}) {
+    const body = customerId ? { customerId } : customerEmail ? { customerEmail } : {}
     const { data } = await apiClient.post(`/api/quotations/${id}/send-to-customer`, body)
-    return data.data
+    return { quotation: data.data, emailDelivery: data.emailDelivery }
   },
   async negotiationThread(id) {
     const { data } = await apiClient.get(`/api/quotations/${id}/comments`)

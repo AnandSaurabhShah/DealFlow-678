@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
+import { toast } from 'sonner'
 import { getApiError } from '../api/client'
 import Icon from '../components/Icon'
 import OneTimeBillingSection from '../components/OneTimeBillingSection'
@@ -42,7 +43,11 @@ export default function BillingPage() {
   const generateBilling = () => {
     resetFeedback()
     generate.mutate(quotationId, {
-      onSuccess: () => setNotice('Billing generated. The invoice and monthly schedule are ready.'),
+      onSuccess: () => {
+        const message = 'Billing generated. The invoice and monthly schedule are ready.'
+        setNotice(message)
+        toast.success(message)
+      },
     })
   }
   const updateQuantity = (lineId, qty) => {
@@ -50,22 +55,32 @@ export default function BillingPage() {
     quantity.mutate({ quotationId, lineId, qty }, {
       onSuccess: result => {
         const label = result.proration.type === 'SCHEDULE_ENTRY' ? 'Prorated charge added' : 'Credit note issued'
-        setNotice(`${label}: ${formatAmount(result.proration.amount)}.`)
+        const message = `${label}: ${formatAmount(result.proration.amount)}.`
+        setNotice(message)
+        toast.success(message)
       },
     })
   }
   const cancelLine = lineId => {
     resetFeedback()
     cancellation.mutate({ quotationId, lineId }, {
-      onSuccess: result => setNotice(result.creditNote
-        ? `Subscription cancelled. Credit note issued for ${formatAmount(result.creditNote.amount)}.`
-        : 'Subscription cancelled. Future billing has stopped.'),
+      onSuccess: result => {
+        const message = result.creditNote
+          ? `Subscription cancelled. Credit note issued for ${formatAmount(result.creditNote.amount)}.`
+          : 'Subscription cancelled. Future billing has stopped.'
+        setNotice(message)
+        toast.success(message)
+      },
     })
   }
   const payInvoice = invoiceId => {
     resetFeedback()
     payment.mutate({ quotationId, invoiceId }, {
-      onSuccess: invoice => setNotice(`Payment of ${formatAmount(invoice.amount)} recorded.`),
+      onSuccess: invoice => {
+        const message = `Payment of ${formatAmount(invoice.amount)} recorded.`
+        setNotice(message)
+        toast.success(message)
+      },
     })
   }
 

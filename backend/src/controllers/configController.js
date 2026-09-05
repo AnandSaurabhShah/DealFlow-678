@@ -1,10 +1,24 @@
 const prisma = require("../config/prisma");
 const ApiError = require("../utils/apiError");
 const { requireFields, decimalString, integer } = require("../utils/validation");
+const { parsePagination, paginationMeta } = require("../utils/pagination");
 
-async function listProducts(_req, res) {
-  const products = await prisma.product.findMany({ orderBy: { createdAt: "desc" } });
-  res.json({ data: products });
+async function paginatedList(req, res, model, options = {}) {
+  const pagination = parsePagination(req.query);
+  const [data, total] = await Promise.all([
+    model.findMany({
+      ...options,
+      skip: pagination.skip,
+      take: pagination.take,
+      orderBy: options.orderBy || [{ createdAt: "desc" }, { id: "desc" }],
+    }),
+    model.count({ where: options.where }),
+  ]);
+  res.json({ data, pagination: paginationMeta(total, pagination) });
+}
+
+async function listProducts(req, res) {
+  return paginatedList(req, res, prisma.product);
 }
 
 async function getProduct(req, res) {
@@ -43,8 +57,8 @@ async function createProduct(req, res) {
   res.status(201).json({ data: product });
 }
 
-async function listPriceLists(_req, res) {
-  res.json({ data: await prisma.priceList.findMany({ orderBy: { createdAt: "desc" } }) });
+async function listPriceLists(req, res) {
+  return paginatedList(req, res, prisma.priceList);
 }
 
 async function getPriceList(req, res) {
@@ -65,9 +79,15 @@ async function createPriceList(req, res) {
 
 const warehouseInclude = { stockLevels: { include: { product: true } } };
 
-async function listWarehouses(_req, res) {
-  res.json({
-    data: await prisma.warehouse.findMany({ include: warehouseInclude, orderBy: { createdAt: "desc" } }),
+async function listWarehouses(req, res) {
+  return paginatedList(req, res, prisma.warehouse, {
+    select: {
+      id: true,
+      name: true,
+      location: true,
+      createdAt: true,
+      _count: { select: { stockLevels: true } },
+    },
   });
 }
 
@@ -130,10 +150,8 @@ async function restockWarehouse(req, res) {
 
 const tierInclude = { categoryOverrides: true };
 
-async function listDiscountTiers(_req, res) {
-  res.json({
-    data: await prisma.discountTier.findMany({ include: tierInclude, orderBy: { createdAt: "desc" } }),
-  });
+async function listDiscountTiers(req, res) {
+  return paginatedList(req, res, prisma.discountTier);
 }
 
 async function getDiscountTier(req, res) {

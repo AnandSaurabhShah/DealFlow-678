@@ -1,6 +1,14 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { portalApi } from '../api/portal'
 
+export function usePortalQuotations({ page = 1, pageSize = 20 } = {}) {
+  return useQuery({
+    queryKey: ['portalQuotations', page, pageSize],
+    queryFn: () => portalApi.listQuotations({ page, pageSize }),
+    placeholderData: previousData => previousData,
+  })
+}
+
 export function usePortalQuotation(id) {
   return useQuery({
     queryKey: ['portalQuotation', id],
@@ -14,7 +22,10 @@ function usePortalQuotationMutation(mutationFn) {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn,
-    onSuccess: quotation => queryClient.setQueryData(['portalQuotation', quotation.id], quotation),
+    onSuccess: quotation => {
+      queryClient.setQueryData(['portalQuotation', quotation.id], quotation)
+      queryClient.invalidateQueries({ queryKey: ['portalQuotations'] })
+    },
   })
 }
 

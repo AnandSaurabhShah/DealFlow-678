@@ -62,6 +62,7 @@ function CustomerProtectedLayout() {
   const signOut = () => {
     logout()
     queryClient.removeQueries({ queryKey: ['portalQuotation'] })
+    queryClient.removeQueries({ queryKey: ['portalQuotations'] })
   }
   return <CustomerPortalShell customer={customer} onLogout={signOut}><Outlet /></CustomerPortalShell>
 }

@@ -1,6 +1,7 @@
 import { useMutation } from '@tanstack/react-query'
 import { useState } from 'react'
 import { login, signup } from '../api/auth'
+import { toast } from 'sonner'
 import { getApiError } from '../api/client'
 import Brand from '../components/Brand'
 import Icon from '../components/Icon'
@@ -16,7 +17,10 @@ export default function LoginPage() {
     mutationFn: values => mode === 'login'
       ? login({ email: values.email, password: values.password })
       : signup(values),
-    onSuccess: setSession,
+    onSuccess: session => {
+      setSession(session)
+      toast.success(mode === 'login' ? 'Signed in successfully.' : 'Team account created successfully.')
+    },
   })
   const update = event => setForm(current => ({ ...current, [event.target.name]: event.target.value }))
   const submit = event => { event.preventDefault(); authMutation.mutate(form) }

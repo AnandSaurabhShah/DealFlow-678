@@ -100,11 +100,20 @@ async function main() {
     body: JSON.stringify({ customerId: customerA.id }),
   });
   expect(sent.status === 200 && sent.body.data.status === "SENT_TO_CUSTOMER", "Rep could not send approved quotation");
+  expect(
+    ["SENT", "SKIPPED"].includes(sent.body.emailDelivery?.status),
+    "Quotation send did not report email delivery status",
+  );
 
   const portalQuote = await request(`/api/portal/quotations/${quoteAOver}`, { headers: auth(customerAToken) });
   expect(portalQuote.status === 200 && portalQuote.body.data.lines.length === 1, "Customer A could not fetch own quotation");
   expect(!("blendedRiskScore" in portalQuote.body.data), "Portal exposed blended risk score");
   expect(!("rep" in portalQuote.body.data), "Portal exposed internal rep data");
+  const portalList = await request("/api/portal/quotations", { headers: auth(customerAToken) });
+  expect(
+    portalList.status === 200 && portalList.body.data.some((quotation) => quotation.id === quoteAOver),
+    "Customer quotation list does not contain the newly shared quotation",
+  );
 
   for (const [method, path, body] of [
     ["GET", `/api/portal/quotations/${quoteB}`],
@@ -183,7 +192,7 @@ async function main() {
     body: JSON.stringify({}),
   });
   expect(duplicate.status === 409, "Duplicate confirmation was processed");
-  const pending = await request("/api/quotations/pending", { headers: auth(managerToken) });
+  const pending = await request(`/api/quotations/pending?quotationId=${quoteAOver}`, { headers: auth(managerToken) });
   expect(pending.body.data.some((quotation) => quotation.id === quoteAOver), "Manager cannot see re-entered approval");
   const approved = await request(`/api/quotations/${quoteAOver}/approve`, {
     method: "POST",
@@ -233,7 +242,7 @@ async function main() {
   await request(`/api/quotations/${highCreated.body.data.id}/send-to-customer`, {
     method: "POST",
     headers: auth(repToken),
-    body: JSON.stringify({ customerId: customerA.id }),
+    body: JSON.stringify({ customerEmail: customerA.email }),
   });
   await request(`/api/portal/quotations/${highCreated.body.data.id}/lines/${highLineId}/discount`, {
     method: "PUT",
@@ -253,8 +262,8 @@ async function main() {
   const highConfirmed = concurrentConfirms.find((response) => response.status === 200);
   expect(highConfirmed.body.data.status === "PENDING_FINANCE_APPROVAL", "High-risk request did not retain Finance destination");
   const [managerBeforeFinance, financeBeforeManager] = await Promise.all([
-    request("/api/quotations/pending", { headers: auth(managerToken) }),
-    request("/api/quotations/pending", { headers: auth(financeToken) }),
+    request(`/api/quotations/pending?quotationId=${highCreated.body.data.id}`, { headers: auth(managerToken) }),
+    request(`/api/quotations/pending?quotationId=${highCreated.body.data.id}`, { headers: auth(financeToken) }),
   ]);
   expect(managerBeforeFinance.body.data.some((quote) => quote.id === highCreated.body.data.id), "Manager did not own first high-risk step");
   expect(!financeBeforeManager.body.data.some((quote) => quote.id === highCreated.body.data.id), "Finance saw high-risk request before Manager");
@@ -264,7 +273,7 @@ async function main() {
     body: JSON.stringify({}),
   });
   expect(highManagerApproval.body.data.status === "PENDING_FINANCE_APPROVAL", "Manager approval skipped Finance");
-  const financeAfterManager = await request("/api/quotations/pending", { headers: auth(financeToken) });
+  const financeAfterManager = await request(`/api/quotations/pending?quotationId=${highCreated.body.data.id}`, { headers: auth(financeToken) });
   expect(financeAfterManager.body.data.some((quote) => quote.id === highCreated.body.data.id), "Finance did not receive Manager-approved high-risk request");
   const highFinanceApproval = await request(`/api/quotations/${highCreated.body.data.id}/approve`, {
     method: "POST",
