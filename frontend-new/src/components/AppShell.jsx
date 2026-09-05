@@ -4,6 +4,7 @@ import Icon from './Icon'
 function getNavItems(role) {
   const items = [['quotations', 'file', 'Quotations']]
   if (role === 'REP') items.push(['builder', 'plus', 'Create quotation'])
+  if (['MANAGER', 'FINANCE'].includes(role)) items.push(['approvals', 'shield', 'Approval Center'])
   if (role === 'ADMIN') items.push(['config', 'box', 'Configuration'])
   return items
 }
@@ -18,8 +19,8 @@ function Sidebar({ page, onNavigate, user, onLogout }) {
 }
 
 function Header({ page, onNavigate, user }) {
-  const titles = { quotations: 'Quotations', builder: 'Quotation builder', config: 'Configuration' }
-  return <header className="sticky top-0 z-10 flex min-h-[82px] items-center justify-between border-b border-slate-200 bg-white px-5 lg:px-9"><div><h1 className="font-display text-[22px] font-bold text-slate-900">{titles[page]}</h1><p className="mt-1 text-xs text-slate-400">MVP 1 workspace</p></div>{user.role === 'REP' && page !== 'builder' && <button onClick={() => onNavigate('builder')} className="flex items-center justify-center gap-2 rounded-lg bg-violet-600 px-4 py-2.5 text-xs font-semibold text-white shadow-lg shadow-violet-600/20 hover:bg-violet-700"><Icon name="plus" /><span>New quotation</span></button>}</header>
+  const titles = { quotations: 'Quotations', builder: 'Quotation builder', approvals: 'Approval Center', config: 'Configuration' }
+  return <header className="sticky top-0 z-10 flex min-h-[82px] items-center justify-between border-b border-slate-200 bg-white px-5 lg:px-9"><div><h1 className="font-display text-[22px] font-bold text-slate-900">{titles[page]}</h1><p className="mt-1 text-xs text-slate-400">Discount governance workspace</p></div>{user.role === 'REP' && page !== 'builder' && <button onClick={() => onNavigate('builder')} className="flex items-center justify-center gap-2 rounded-lg bg-violet-600 px-4 py-2.5 text-xs font-semibold text-white shadow-lg shadow-violet-600/20 hover:bg-violet-700"><Icon name="plus" /><span>New quotation</span></button>}</header>
 }
 
 export default function AppShell({ page, onNavigate, user, onLogout, children }) {
