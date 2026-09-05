@@ -1,7 +1,7 @@
 require("dotenv").config();
 
 const bcrypt = require("bcrypt");
-const { PrismaClient } = require("@prisma/client");
+const { Prisma, PrismaClient } = require("@prisma/client");
 const { PrismaPg } = require("@prisma/adapter-pg");
 const {
   calculateBlendedRiskScore,
@@ -517,8 +517,21 @@ async function main() {
     await seedMvp5Quotation({ ...scenario, repId: rep.id, internalActorId: rep.id });
   }
 
+  await seedFinalLoadData({
+    passwordHashes: {
+      ADMIN: adminPasswordHash,
+      REP: repPasswordHash,
+      MANAGER: managerPasswordHash,
+      FINANCE: financePasswordHash,
+    },
+    customerPasswordHash,
+    demoRepId: rep.id,
+    managerId: manager.id,
+    financeId: finance.id,
+  });
+
   console.log(
-    `Seeded demo users, catalog, discount rules, ${mvp2Scenarios.length} MVP 2 scenarios, ${mvp3Scenarios.length} MVP 3 scenarios, ${mvp4Scenarios.length} MVP 4 billing scenarios, and ${mvp5Scenarios.length} MVP 5 negotiation scenarios`,
+    "Seeded focused MVP 1-5 scenarios plus at least 150 deterministic rows for every table",
   );
 }
 
@@ -800,6 +813,413 @@ async function clearQuotationDependents(tx, quotationId) {
   await tx.fulfillmentSplit.deleteMany({ where: { quotationId } });
   await tx.approvalLog.deleteMany({ where: { quotationId } });
   await tx.quotationLine.deleteMany({ where: { quotationId } });
+}
+
+async function seedFinalLoadData({
+  passwordHashes,
+  customerPasswordHash,
+  demoRepId,
+  managerId,
+  financeId,
+}) {
+  const rowCount = 150;
+  const range = Array.from({ length: rowCount }, (_, index) => index + 1);
+  const roles = ["REP", "MANAGER", "FINANCE", "ADMIN"];
+  const baseDate = new Date();
+  baseDate.setUTCHours(12, 0, 0, 0);
+
+  const users = range.map((index) => {
+    const role = roles[(index - 1) % roles.length];
+    return {
+      id: loadId("1", index),
+      name: `Load Test ${role} ${pad(index)}`,
+      email: `load-${role.toLowerCase()}-${pad(index)}@dealflow360.test`,
+      passwordHash: passwordHashes[role],
+      role,
+    };
+  });
+  const customers = range.map((index) => ({
+    id: loadId("f", index),
+    name: `Load Customer ${pad(index)}`,
+    email: `load-customer-${pad(index)}@dealflow360.test`,
+    passwordHash: customerPasswordHash,
+  }));
+  const products = range.map((index) => {
+    const recurring = index <= 38;
+    return {
+      id: loadId("2", index),
+      name: recurring
+        ? `Load Monthly Subscription ${pad(index)}`
+        : `Load Business Product ${pad(index)}`,
+      category: recurring ? "Software" : index % 3 === 0 ? "Service" : "Hardware",
+      price: String(recurring ? 30 + index * 2 : 100 + index * 7),
+      unit: recurring ? "seat/month" : index % 3 === 0 ? "service" : "unit",
+      tax: index % 2 === 0 ? "18.00" : "12.00",
+      description: `Deterministic final-seed product ${index}`,
+      billingType: recurring ? "RECURRING" : "ONE_TIME",
+      billingCycle: recurring ? "MONTHLY" : null,
+    };
+  });
+  const productById = new Map(products.map((product) => [product.id, product]));
+  const priceLists = range.map((index) => ({
+    id: loadId("3", index),
+    name: `Load Price List ${pad(index)}`,
+    customerTier: ["STANDARD", "SILVER", "GOLD"][index % 3],
+    currency: "USD",
+  }));
+  const warehouses = range.map((index) => ({
+    id: loadId("4", index),
+    name: `Load Warehouse ${pad(index)}`,
+    location: `Region ${String((index % 12) + 1).padStart(2, "0")}`,
+  }));
+  const stockLevels = range.map((index) => ({
+    id: loadId("5", index),
+    warehouseId: loadId("4", index),
+    productId: loadId("2", 39 + ((index - 1) % 112)),
+    qty: 100 + (index % 75),
+  }));
+  const tiers = range.map((index) => ({
+    id: loadId("6", index),
+    tierName: `Load Tier ${pad(index)}`,
+    maxDiscountPercent: String(5 + (index % 21)),
+  }));
+  const overrides = range.map((index) => ({
+    id: loadId("7", index),
+    discountTierId: loadId("6", index),
+    category: index % 2 === 0 ? "Service" : "Hardware",
+    maxDiscountPercent: String(3 + (index % 15)),
+  }));
+
+  const quotations = [];
+  const quotationLines = [];
+  const approvalLogs = [];
+  const negotiationComments = [];
+  const negotiationEvents = [];
+  const fulfillmentSplits = [];
+  const schedules = [];
+  const invoices = [];
+  const creditNotes = [];
+  let commentIndex = 1;
+  let eventIndex = 1;
+  let fulfillmentIndex = 1;
+  let scheduleIndex = 1;
+  let invoiceIndex = 1;
+  let creditIndex = 1;
+
+  for (const index of range) {
+    const quotationId = loadId("8", index);
+    const lineId = loadId("9", index);
+    const customerId = loadId("f", index);
+    const product = productById.get(loadId("2", index));
+    const status = finalLoadStatus(index);
+    const fulfilled = status === "FULFILLED";
+    const recurringBilled = index <= 25;
+    const qty = fulfilled ? 60 : 1 + (index % 8);
+    const discountPercent = finalLoadDiscount(status, index);
+    const calculated = calculateLineTotal({
+      qty,
+      unitPrice: product.price,
+      discountPercent,
+    });
+    const approvalRound = [
+      "UNDER_NEGOTIATION",
+      "PENDING_MANAGER_APPROVAL",
+      "PENDING_FINANCE_APPROVAL",
+      "REJECTED",
+      "DRAFT",
+    ].includes(status) ? 1 : 0;
+    const sentToCustomerAt = index > 25 ? addDays(baseDate, -(30 + (index % 20))) : null;
+
+    quotations.push({
+      id: quotationId,
+      customerName: `Load Customer ${pad(index)}`,
+      repId: demoRepId,
+      customerId,
+      status,
+      subtotal: calculated.subtotal,
+      totalDiscount: calculated.discount,
+      grandTotal: calculated.lineTotal,
+      blendedRiskScore: finalLoadRiskScore(status),
+      approvalRound,
+      sentToCustomerAt,
+    });
+    quotationLines.push({
+      id: lineId,
+      quotationId,
+      productId: product.id,
+      qty,
+      unitPrice: product.price,
+      discountPercent,
+      lineTotal: calculated.lineTotal,
+      billingType: product.billingType,
+      billingCycle: product.billingCycle,
+      subscriptionStartDate: recurringBilled ? addUtcMonths(baseDate, -5) : null,
+    });
+
+    const approval = finalLoadApproval(status, approvalRound, managerId, financeId);
+    approvalLogs.push({
+      id: loadId("a", index),
+      quotationId,
+      ...approval,
+      createdAt: addDays(baseDate, -(index + 5)),
+    });
+
+    if (index >= 26 && index <= 75) {
+      const comments = [
+        {
+          authorType: "CUSTOMER",
+          authorId: customerId,
+          quotationLineId: null,
+          content: "Could you review the commercial terms for this quotation?",
+        },
+        {
+          authorType: "INTERNAL",
+          authorId: demoRepId,
+          quotationLineId: null,
+          content: "We reviewed your request and can discuss the line discount.",
+        },
+        {
+          authorType: "CUSTOMER",
+          authorId: customerId,
+          quotationLineId: lineId,
+          content: `Please consider the requested ${discountPercent}% discount on this line.`,
+        },
+      ];
+      for (const [commentOffset, comment] of comments.entries()) {
+        negotiationComments.push({
+          id: loadId("aa", commentIndex),
+          quotationId,
+          ...comment,
+          createdAt: addDays(baseDate, -(8 - commentOffset)),
+        });
+        commentIndex += 1;
+      }
+    }
+
+    if (index >= 26 && index <= 50) {
+      negotiationEvents.push({
+        id: loadId("ab", eventIndex),
+        quotationId,
+        quotationLineId: null,
+        actorType: "INTERNAL",
+        actorId: demoRepId,
+        action: "SENT_TO_CUSTOMER",
+        details: { customerId, seeded: true },
+        createdAt: sentToCustomerAt,
+      });
+      eventIndex += 1;
+    }
+    if (index >= 51 && index <= 75) {
+      const events = [
+        ["INTERNAL", demoRepId, "SENT_TO_CUSTOMER", null],
+        ["CUSTOMER", customerId, "DISCOUNT_UPDATED", lineId],
+        ["CUSTOMER", customerId, "CUSTOMER_CONFIRMED", null],
+        ["CUSTOMER", customerId, "APPROVAL_REENTRY", null],
+        ["CUSTOMER", customerId, "DISCOUNT_UPDATED", lineId],
+      ];
+      for (const [eventOffset, [actorType, actorId, action, quotationLineId]] of events.entries()) {
+        negotiationEvents.push({
+          id: loadId("ab", eventIndex),
+          quotationId,
+          quotationLineId,
+          actorType,
+          actorId,
+          action,
+          details: action === "DISCOUNT_UPDATED"
+            ? { previousDiscountPercent: "10", requestedDiscountPercent: discountPercent }
+            : { seeded: true },
+          createdAt: addDays(baseDate, -(10 - eventOffset)),
+        });
+        eventIndex += 1;
+      }
+    }
+
+    if (fulfilled) {
+      for (let warehouseIndex = 1; warehouseIndex <= 6; warehouseIndex += 1) {
+        fulfillmentSplits.push({
+          id: loadId("b", fulfillmentIndex),
+          quotationId,
+          warehouseId: loadId("4", warehouseIndex),
+          productId: product.id,
+          qtyFulfilled: 10,
+          qtyBackordered: 0,
+        });
+        fulfillmentIndex += 1;
+      }
+    }
+
+    if (recurringBilled) {
+      for (let cycle = 0; cycle < 6; cycle += 1) {
+        const billingDate = addUtcMonths(baseDate, cycle - 2);
+        schedules.push({
+          id: loadId("c", scheduleIndex),
+          quotationLineId: lineId,
+          billingDate,
+          amount: calculated.lineTotal,
+          status: cycle < 2 ? "BILLED" : "PENDING",
+          createdAt: addDays(billingDate, -2),
+        });
+        scheduleIndex += 1;
+        creditNotes.push({
+          id: loadId("e", creditIndex),
+          quotationLineId: lineId,
+          amount: new Prisma.Decimal(product.price).mul((cycle % 3) + 1).div(4),
+          reason: `Prorated quantity reduction cycle ${cycle + 1}`,
+          createdAt: addDays(billingDate, 1),
+        });
+        creditIndex += 1;
+      }
+      for (let cycle = 0; cycle < 5; cycle += 1) {
+        invoices.push({
+          id: loadId("d", invoiceIndex),
+          quotationId,
+          amount: calculated.lineTotal,
+          type: "RECURRING",
+          paid: cycle < 4,
+          createdAt: addUtcMonths(baseDate, cycle - 4),
+        });
+        invoiceIndex += 1;
+      }
+    }
+    if (fulfilled) {
+      invoices.push({
+        id: loadId("d", invoiceIndex),
+        quotationId,
+        amount: calculated.lineTotal,
+        type: "ONE_TIME",
+        paid: index % 3 !== 0,
+        createdAt: addDays(baseDate, -20),
+      });
+      invoiceIndex += 1;
+    }
+  }
+
+  const ids = finalLoadIds(range);
+  await prisma.$transaction(async (tx) => {
+    await tx.billingScheduleEntry.deleteMany({ where: { quotationLineId: { in: ids.lines } } });
+    await tx.creditNote.deleteMany({ where: { quotationLineId: { in: ids.lines } } });
+    await tx.negotiationComment.deleteMany({ where: { quotationId: { in: ids.quotations } } });
+    await tx.negotiationEvent.deleteMany({ where: { quotationId: { in: ids.quotations } } });
+    await tx.invoice.deleteMany({ where: { quotationId: { in: ids.quotations } } });
+    await tx.fulfillmentSplit.deleteMany({ where: { quotationId: { in: ids.quotations } } });
+    await tx.approvalLog.deleteMany({ where: { quotationId: { in: ids.quotations } } });
+    await tx.quotationLine.deleteMany({ where: { quotationId: { in: ids.quotations } } });
+    await tx.quotation.deleteMany({ where: { id: { in: ids.quotations } } });
+    await tx.stockLevel.deleteMany({ where: { id: { in: ids.stockLevels } } });
+    await tx.categoryDiscountOverride.deleteMany({ where: { id: { in: ids.overrides } } });
+    await tx.discountTier.deleteMany({ where: { id: { in: ids.tiers } } });
+    await tx.warehouse.deleteMany({ where: { id: { in: ids.warehouses } } });
+    await tx.product.deleteMany({ where: { id: { in: ids.products } } });
+    await tx.priceList.deleteMany({ where: { id: { in: ids.priceLists } } });
+    await tx.customer.deleteMany({ where: { id: { in: ids.customers } } });
+    await tx.user.deleteMany({ where: { id: { in: ids.users } } });
+
+    await tx.user.createMany({ data: users });
+    await tx.customer.createMany({ data: customers });
+    await tx.product.createMany({ data: products });
+    await tx.priceList.createMany({ data: priceLists });
+    await tx.warehouse.createMany({ data: warehouses });
+    await tx.stockLevel.createMany({ data: stockLevels });
+    await tx.discountTier.createMany({ data: tiers });
+    await tx.categoryDiscountOverride.createMany({ data: overrides });
+    await tx.quotation.createMany({ data: quotations });
+    await tx.quotationLine.createMany({ data: quotationLines });
+    await tx.approvalLog.createMany({ data: approvalLogs });
+    await tx.negotiationComment.createMany({ data: negotiationComments });
+    await tx.negotiationEvent.createMany({ data: negotiationEvents });
+    await tx.fulfillmentSplit.createMany({ data: fulfillmentSplits });
+    await tx.billingScheduleEntry.createMany({ data: schedules });
+    await tx.invoice.createMany({ data: invoices });
+    await tx.creditNote.createMany({ data: creditNotes });
+  }, { timeout: 30_000 });
+}
+
+function finalLoadIds(range) {
+  return {
+    users: range.map((index) => loadId("1", index)),
+    customers: range.map((index) => loadId("f", index)),
+    products: range.map((index) => loadId("2", index)),
+    priceLists: range.map((index) => loadId("3", index)),
+    warehouses: range.map((index) => loadId("4", index)),
+    stockLevels: range.map((index) => loadId("5", index)),
+    tiers: range.map((index) => loadId("6", index)),
+    overrides: range.map((index) => loadId("7", index)),
+    quotations: range.map((index) => loadId("8", index)),
+    lines: range.map((index) => loadId("9", index)),
+  };
+}
+
+function finalLoadStatus(index) {
+  if (index <= 25) return "APPROVED";
+  if (index <= 50) return "SENT_TO_CUSTOMER";
+  if (index <= 75) return "UNDER_NEGOTIATION";
+  if (index <= 90) return "PENDING_MANAGER_APPROVAL";
+  if (index <= 105) return "PENDING_FINANCE_APPROVAL";
+  if (index <= 115) return "REJECTED";
+  if (index <= 125) return "DRAFT";
+  return "FULFILLED";
+}
+
+function finalLoadDiscount(status, index) {
+  if (status === "PENDING_MANAGER_APPROVAL") return "18";
+  if (status === "PENDING_FINANCE_APPROVAL" || status === "REJECTED") return "30";
+  if (status === "UNDER_NEGOTIATION") return String(16 + (index % 10));
+  return String(index % 3 === 0 ? 5 : 0);
+}
+
+function finalLoadRiskScore(status) {
+  if (status === "PENDING_MANAGER_APPROVAL") return "5";
+  if (status === "PENDING_FINANCE_APPROVAL" || status === "REJECTED") return "15";
+  return "0";
+}
+
+function finalLoadApproval(status, approvalRound, managerId, financeId) {
+  if (status === "PENDING_MANAGER_APPROVAL") {
+    return {
+      actorId: managerId,
+      action: "RETURNED",
+      approvalRound: Math.max(0, approvalRound - 1),
+      reason: "Previous customer request was returned for revision",
+    };
+  }
+  if (status === "PENDING_FINANCE_APPROVAL") {
+    return {
+      actorId: managerId,
+      action: "APPROVED",
+      approvalRound,
+      reason: null,
+    };
+  }
+  if (status === "REJECTED") {
+    return {
+      actorId: managerId,
+      action: "REJECTED",
+      approvalRound,
+      reason: "Requested discount is not commercially viable",
+    };
+  }
+  if (status === "DRAFT") {
+    return {
+      actorId: managerId,
+      action: "RETURNED",
+      approvalRound,
+      reason: "Please revise the quotation terms",
+    };
+  }
+  return {
+    actorId: status === "FULFILLED" ? financeId : managerId,
+    action: "APPROVED",
+    approvalRound,
+    reason: null,
+  };
+}
+
+function pad(index) {
+  return String(index).padStart(3, "0");
+}
+
+function loadId(prefix, index) {
+  return `${prefix.padEnd(8, "0")}-0000-4000-8000-${String(index).padStart(12, "0")}`;
 }
 
 function addDays(date, days) {
