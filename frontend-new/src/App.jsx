@@ -5,11 +5,12 @@ import AdminConfigPage from './pages/AdminConfigPage'
 import ApprovalDetailPage from './pages/ApprovalDetailPage'
 import ApprovalsPage from './pages/ApprovalsPage'
 import LoginPage from './pages/LoginPage'
+import FulfillmentPage from './pages/FulfillmentPage'
 import QuotationBuilderPage from './pages/QuotationBuilderPage'
 import QuotationsPage from './pages/QuotationsPage'
 import { useAuthStore } from './store/authStore'
 
-const paths = { quotations: '/quotations', builder: '/quotations/new', approvals: '/approvals', config: '/configuration' }
+const paths = { quotations: '/quotations', builder: '/quotations/new', approvals: '/approvals', fulfillment: '/fulfillment', config: '/configuration' }
 
 export default function App() {
   const user = useAuthStore(state => state.user)
@@ -18,8 +19,10 @@ export default function App() {
     <Route element={<ProtectedLayout />}>
       <Route index element={<Navigate to="/quotations" replace />} />
       <Route path="/quotations" element={<QuotationsPage />} />
+      <Route path="/fulfillment" element={<RoleGate roles={['REP', 'ADMIN']}><QuotationsPage fulfillmentOnly /></RoleGate>} />
       <Route path="/quotations/new" element={<RoleGate roles={['REP']}><QuotationBuilderPage /></RoleGate>} />
       <Route path="/quotations/:quotationId" element={<RoleGate roles={['REP']}><QuotationBuilderPage /></RoleGate>} />
+      <Route path="/quotations/:quotationId/fulfillment" element={<RoleGate roles={['REP', 'ADMIN']}><FulfillmentPage /></RoleGate>} />
       <Route path="/approvals" element={<RoleGate roles={['MANAGER', 'FINANCE']}><ApprovalsPage /></RoleGate>} />
       <Route path="/approvals/:quotationId" element={<ApprovalDetailPage />} />
       <Route path="/configuration" element={<RoleGate roles={['ADMIN']}><AdminConfigPage /></RoleGate>} />
@@ -36,7 +39,9 @@ function ProtectedLayout() {
   const logout = useAuthStore(state => state.logout)
   if (!user) return <Navigate to="/login" replace />
 
-  const page = location.pathname.startsWith('/approvals')
+  const page = location.pathname.includes('/fulfillment')
+    ? 'fulfillment'
+    : location.pathname.startsWith('/approvals')
     ? 'approvals'
     : location.pathname === '/configuration'
       ? 'config'

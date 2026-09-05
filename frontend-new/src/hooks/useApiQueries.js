@@ -74,6 +74,42 @@ export function useReturnQuotation() {
   return useApprovalMutation(({ id, reason }) => quotationApi.returnForRevision(id, reason))
 }
 
+export function useFulfillmentSuggestion(id, enabled = true) {
+  return useQuery({
+    queryKey: ['fulfillmentSuggestion', id],
+    queryFn: () => quotationApi.suggestFulfillment(id),
+    enabled: Boolean(id && enabled),
+    staleTime: 0,
+  })
+}
+
+export function useFulfillmentBackorder(id, enabled = false) {
+  return useQuery({
+    queryKey: ['fulfillmentBackorder', id],
+    queryFn: () => quotationApi.checkFulfillmentBackorder(id),
+    enabled: Boolean(id && enabled),
+    staleTime: 0,
+  })
+}
+
+export function useConfirmFulfillment() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, allocations }) => quotationApi.confirmFulfillment(id, allocations),
+    onSuccess: quotation => {
+      queryClient.setQueryData(['quotation', quotation.id], quotation)
+      queryClient.removeQueries({ queryKey: ['fulfillmentSuggestion', quotation.id] })
+      queryClient.invalidateQueries({ queryKey: ['fulfillmentBackorder', quotation.id] })
+      queryClient.invalidateQueries({ queryKey: ['quotations'] })
+    },
+    onError: (error, variables) => {
+      if (error.response?.data?.error?.code !== 'INVALID_QUOTATION_STATUS') return
+      queryClient.invalidateQueries({ queryKey: ['quotation', variables.id] })
+      queryClient.invalidateQueries({ queryKey: ['quotations'] })
+    },
+  })
+}
+
 export function useAdminConfig() {
   const isAdmin = useAuthStore(state => state.user?.role === 'ADMIN')
   return {

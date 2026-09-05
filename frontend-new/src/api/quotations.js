@@ -41,4 +41,16 @@ export const quotationApi = {
     const { data } = await apiClient.post(`/api/quotations/${id}/return`, { reason })
     return data.data
   },
+  async suggestFulfillment(id) {
+    const { data } = await apiClient.get(`/api/quotations/${id}/fulfillment/suggest`)
+    return data.data
+  },
+  async confirmFulfillment(id, allocations) {
+    const { data } = await apiClient.post(`/api/quotations/${id}/fulfillment/confirm`, allocations)
+    return data.data
+  },
+  async checkFulfillmentBackorder(id) {
+    const { data } = await apiClient.get(`/api/quotations/${id}/fulfillment/backorder-check`)
+    return data.data
+  },
 }

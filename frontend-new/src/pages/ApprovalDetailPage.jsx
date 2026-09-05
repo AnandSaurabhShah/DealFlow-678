@@ -28,6 +28,8 @@ export default function ApprovalDetailPage() {
 
   const quote = quotation.data
   const isReviewer = ['MANAGER', 'FINANCE'].includes(user.role)
+  const canManageFulfillment = user.role === 'ADMIN' || (user.role === 'REP' && quote.repId === user.id)
+  const showFulfillmentAction = canManageFulfillment && ['APPROVED', 'FULFILLED'].includes(quote.status)
   const assignedToUser = isReviewer && pending.isSuccess && pending.data.some(item => item.id === quote.id)
   const mutations = [approve, reject, returnForRevision]
   const activeMutation = mutations.find(mutation => mutation.isPending)
@@ -54,7 +56,7 @@ export default function ApprovalDetailPage() {
     <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
       <div className="flex flex-wrap items-start justify-between gap-4 border-b border-slate-100 p-5 sm:p-6">
         <div><p className="text-[10px] font-semibold tracking-widest text-violet-600">QUOTATION</p><h2 className="mt-2 font-display text-xl font-bold">{shortId(quote.id)}</h2><p className="mt-1 text-sm text-slate-500">{quote.customerName}</p></div>
-        <div className="text-right"><p className="font-display text-2xl font-bold">{formatMoney(Number(quote.grandTotal))}</p><div className="mt-2"><StatusBadge value={quote.status} /></div></div>
+        <div className="text-right"><p className="font-display text-2xl font-bold">{formatMoney(Number(quote.grandTotal))}</p><div className="mt-2"><StatusBadge value={quote.status} /></div>{showFulfillmentAction && <button onClick={() => navigate(`/quotations/${quote.id}/fulfillment`)} className="mt-3 inline-flex items-center gap-2 rounded-lg bg-violet-600 px-3.5 py-2 text-xs font-semibold text-white hover:bg-violet-700 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:ring-offset-2"><Icon name="truck" size={15} />{quote.status === 'FULFILLED' ? 'View Fulfillment' : 'Plan Fulfillment'}</button>}</div>
       </div>
       <div className="grid divide-y divide-slate-100 md:grid-cols-3 md:divide-x md:divide-y-0">
         <Fact label="Owner" value={quote.rep?.name || 'Unknown'} />
@@ -95,6 +97,7 @@ function approvalRequirement(quotation, history) {
   }
   if (quotation.status === 'REJECTED') return 'Rejected'
   if (quotation.status === 'DRAFT') return 'No approval currently required'
+  if (quotation.status === 'FULFILLED') return 'Fulfillment complete'
   return 'Approval complete'
 }
 

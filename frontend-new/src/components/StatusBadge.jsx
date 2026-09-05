@@ -5,6 +5,7 @@ const styles = {
   APPROVED: 'bg-emerald-50 text-emerald-700',
   REJECTED: 'bg-red-50 text-red-700',
   CONFIRMED: 'bg-emerald-50 text-emerald-700',
+  FULFILLED: 'bg-cyan-50 text-cyan-700',
 }
 
 const statusLabels = {
@@ -14,6 +15,7 @@ const statusLabels = {
   APPROVED: 'Approved',
   REJECTED: 'Rejected',
   CONFIRMED: 'Confirmed',
+  FULFILLED: 'Fulfilled',
 }
 
 export default function StatusBadge({ value }) {
