@@ -20,7 +20,17 @@ enum Role {
 
 enum QuotationStatus {
   DRAFT
+  PENDING_MANAGER_APPROVAL
+  PENDING_FINANCE_APPROVAL
+  APPROVED
+  REJECTED
   CONFIRMED
+}
+
+enum ApprovalAction {
+  APPROVED
+  REJECTED
+  RETURNED
 }
 
 model User {
@@ -30,6 +40,7 @@ model User {
   passwordHash String
   role         Role
   quotations   Quotation[]
+  approvalLogs ApprovalLog[]
   createdAt    DateTime    @default(now())
 }
 
@@ -99,8 +110,10 @@ model Quotation {
   subtotal      Decimal         @default(0)
   totalDiscount Decimal         @default(0)
   grandTotal    Decimal         @default(0)
+  blendedRiskScore Decimal      @default(0)
   rep           User            @relation(fields: [repId], references: [id])
   lines         QuotationLine[]
+  approvalLogs  ApprovalLog[]
   createdAt     DateTime        @default(now())
   updatedAt     DateTime        @updatedAt
 }
@@ -115,4 +128,18 @@ model QuotationLine {
   lineTotal       Decimal
   quotation       Quotation @relation(fields: [quotationId], references: [id])
   product         Product   @relation(fields: [productId], references: [id])
+}
+
+model ApprovalLog {
+  id          String         @id @default(uuid())
+  quotationId String
+  actorId     String
+  action      ApprovalAction
+  reason      String?
+  createdAt   DateTime       @default(now())
+  quotation   Quotation      @relation(fields: [quotationId], references: [id])
+  actor       User           @relation(fields: [actorId], references: [id])
+
+  @@index([quotationId, createdAt])
+  @@index([actorId])
 }

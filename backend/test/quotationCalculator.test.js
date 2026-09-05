@@ -1,6 +1,10 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const {
+  FINANCE_THRESHOLD,
+  MANAGER_THRESHOLD,
+  calculateBlendedRiskScore,
+  calculateLineDiscountExcess,
   calculateLineTotal,
   calculateQuotationTotals,
 } = require("../src/services/quotationCalculator");
@@ -27,4 +31,49 @@ test("returns zero totals for an empty quotation", () => {
   assert.equal(result.subtotal.toString(), "0");
   assert.equal(result.totalDiscount.toString(), "0");
   assert.equal(result.grandTotal.toString(), "0");
+});
+
+test("calculates the PS Gold hardware/service example using category ceilings", () => {
+  const goldTier = {
+    maxDiscountPercent: "15",
+    categoryOverrides: [{ category: "Service", maxDiscountPercent: "10" }],
+  };
+  const lines = [
+    { discountPercent: "15", product: { category: "Hardware" } },
+    { discountPercent: "18", product: { category: "Service" } },
+  ];
+
+  const score = calculateBlendedRiskScore(lines, goldTier);
+  assert.equal(calculateLineDiscountExcess(lines[0], goldTier).toString(), "0");
+  assert.equal(calculateLineDiscountExcess(lines[1], goldTier).toString(), "8");
+  assert.equal(score.toString(), "8");
+  assert.ok(score.greaterThan(MANAGER_THRESHOLD));
+  assert.ok(score.lessThanOrEqualTo(FINANCE_THRESHOLD));
+});
+
+test("adds several mild overages into one blended risk score", () => {
+  const tier = { maxDiscountPercent: "5", categoryOverrides: [] };
+  const score = calculateBlendedRiskScore(
+    [
+      { category: "Hardware", discountPercent: "7" },
+      { category: "Service", discountPercent: "8" },
+      { category: "Software", discountPercent: "6" },
+    ],
+    tier,
+  );
+
+  assert.equal(score.toString(), "6");
+});
+
+test("falls back to the tier ceiling when no category override exists", () => {
+  const tier = {
+    maxDiscountPercent: "5",
+    categoryOverrides: [{ category: "Service", maxDiscountPercent: "10" }],
+  };
+  const score = calculateBlendedRiskScore(
+    [{ category: "Hardware", discountPercent: "7" }],
+    tier,
+  );
+
+  assert.equal(score.toString(), "2");
 });
