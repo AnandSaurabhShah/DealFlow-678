@@ -224,7 +224,7 @@ async function main() {
   const highCreated = await request("/api/quotations", {
     method: "POST",
     headers: auth(repToken),
-    body: JSON.stringify({ customerName: "MVP5 high-risk manager-first" }),
+    body: JSON.stringify({ customerId: customerA.id }),
   });
   const highUpdated = await request(`/api/quotations/${highCreated.body.data.id}`, {
     method: "PUT",
@@ -233,17 +233,12 @@ async function main() {
   });
   const highLineId = highUpdated.body.data.lines[0].id;
   await request(`/api/quotations/${highCreated.body.data.id}/confirm`, { method: "POST", headers: auth(repToken) });
-  const missingCustomer = await request(`/api/quotations/${highCreated.body.data.id}/send-to-customer`, {
+  const linkedSend = await request(`/api/quotations/${highCreated.body.data.id}/send-to-customer`, {
     method: "POST",
     headers: auth(repToken),
     body: JSON.stringify({}),
   });
-  expect(missingCustomer.status === 400 && missingCustomer.body.error.code === "CUSTOMER_REQUIRED", "Quotation was sent without customer linkage");
-  await request(`/api/quotations/${highCreated.body.data.id}/send-to-customer`, {
-    method: "POST",
-    headers: auth(repToken),
-    body: JSON.stringify({ customerEmail: customerA.email }),
-  });
+  expect(linkedSend.status === 200, "Quotation did not use its creation-time customer linkage");
   await request(`/api/portal/quotations/${highCreated.body.data.id}/lines/${highLineId}/discount`, {
     method: "PUT",
     headers: auth(customerAToken),

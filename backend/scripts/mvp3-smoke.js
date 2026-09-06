@@ -34,7 +34,7 @@ async function createApprovedQuotation(token, productId, qty, label) {
   const created = await request("/api/quotations", {
     method: "POST",
     headers,
-    body: JSON.stringify({ customerName: `${label} ${Date.now()}` }),
+    body: JSON.stringify({ customerId: "00000000-0000-4000-8000-000000000801" }),
   });
   expect(created.status === 201, `Could not create ${label} quotation`);
 

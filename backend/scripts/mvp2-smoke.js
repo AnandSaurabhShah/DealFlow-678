@@ -35,7 +35,7 @@ async function createSubmittedQuote(repToken, products, discounts, customerName)
   const created = await request("/api/quotations", {
     method: "POST",
     headers: auth(repToken),
-    body: JSON.stringify({ customerName }),
+    body: JSON.stringify({ customerId: "00000000-0000-4000-8000-000000000801" }),
   });
   expect(created.status === 201, `Could not create ${customerName}`);
 

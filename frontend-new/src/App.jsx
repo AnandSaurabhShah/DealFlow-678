@@ -35,8 +35,8 @@ export default function App() {
       <Route path="/quotations" element={<QuotationsPage />} />
       <Route path="/fulfillment" element={<RoleGate roles={['REP', 'ADMIN']}><QuotationsPage fulfillmentOnly /></RoleGate>} />
       <Route path="/billing" element={<RoleGate roles={['REP', 'ADMIN']}><QuotationsPage billingOnly /></RoleGate>} />
-      <Route path="/quotations/new" element={<RoleGate roles={['REP']}><QuotationBuilderPage /></RoleGate>} />
-      <Route path="/quotations/:quotationId" element={<RoleGate roles={['REP']}><QuotationBuilderPage /></RoleGate>} />
+      <Route path="/quotations/new" element={<RoleGate roles={['REP', 'ADMIN']}><QuotationBuilderPage /></RoleGate>} />
+      <Route path="/quotations/:quotationId" element={<RoleGate roles={['REP', 'ADMIN']}><QuotationBuilderPage /></RoleGate>} />
       <Route path="/quotations/:quotationId/fulfillment" element={<RoleGate roles={['REP', 'ADMIN']}><FulfillmentPage /></RoleGate>} />
       <Route path="/quotations/:quotationId/billing" element={<RoleGate roles={['REP', 'ADMIN']}><BillingPage /></RoleGate>} />
       <Route path="/quotations/:quotationId/negotiation" element={<RoleGate roles={['REP', 'MANAGER', 'ADMIN']}><InternalNegotiationPage /></RoleGate>} />

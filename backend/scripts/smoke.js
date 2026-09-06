@@ -123,7 +123,7 @@ async function main() {
   const quotation = await request("/api/quotations", {
     method: "POST",
     headers: { authorization: `Bearer ${repToken}` },
-    body: JSON.stringify({ customerName: "Smoke Test Customer", repId: "ignored" }),
+    body: JSON.stringify({ customerId: "00000000-0000-4000-8000-000000000801", repId: "ignored" }),
   });
   expect(
     quotation.status === 201 && quotation.body.data.rep.email === "rep@dealflow360.test",

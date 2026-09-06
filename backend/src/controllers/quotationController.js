@@ -12,6 +12,7 @@ const {
 } = require("../services/approvalService");
 const { proposeFulfillmentSplits } = require("../services/fulfillmentSplitter");
 const { parsePagination, paginationMeta } = require("../utils/pagination");
+const { combineWhere, parseSearch } = require("../utils/search");
 const {
   buildBackorderCheck,
   buildFulfillmentRecords,
@@ -19,6 +20,7 @@ const {
 
 const quotationInclude = {
   rep: { select: { id: true, name: true, email: true, role: true } },
+  customer: { select: { id: true, name: true, email: true } },
   lines: { include: { product: true }, orderBy: { id: "asc" } },
 };
 
@@ -45,6 +47,7 @@ const quotationSummarySelect = {
   createdAt: true,
   updatedAt: true,
   rep: { select: { id: true, name: true, email: true, role: true } },
+  customer: { select: { id: true, name: true, email: true } },
   _count: { select: { lines: true } },
 };
 
@@ -89,10 +92,18 @@ function assertCanView(user, quotation) {
 
 async function listQuotations(req, res) {
   const pagination = parsePagination(req.query);
-  const where = {
+  const search = parseSearch(req.query.search);
+  const where = combineWhere({
     ...(req.user.role === "REP" ? { repId: req.user.id } : {}),
     ...(req.query.status ? { status: statusFilter(req.query.status) } : {}),
-  };
+  }, search ? {
+    OR: [
+      { id: { contains: search, mode: "insensitive" } },
+      { customerName: { contains: search, mode: "insensitive" } },
+      { rep: { is: { name: { contains: search, mode: "insensitive" } } } },
+      { rep: { is: { email: { contains: search, mode: "insensitive" } } } },
+    ],
+  } : undefined);
   const [quotations, total] = await Promise.all([
     prisma.quotation.findMany({
       where,
@@ -133,12 +144,27 @@ async function getQuotationHistory(req, res) {
 }
 
 async function createQuotation(req, res) {
-  requireFields(req.body, ["customerName"]);
-  const customerName = String(req.body.customerName).trim();
-  if (!customerName) throw new ApiError(400, "VALIDATION_ERROR", "customerName is required");
+  requireFields(req.body, ["customerId"]);
+  const customerId = uuid(req.body.customerId, "customerId");
+  const repId = req.user.role === "ADMIN"
+    ? uuid(req.body.repId, "repId")
+    : req.user.id;
+  const [customer, owner] = await Promise.all([
+    prisma.customer.findUnique({
+      where: { id: customerId },
+      select: { id: true, name: true },
+    }),
+    prisma.user.findUnique({ where: { id: repId }, select: { id: true, role: true } }),
+  ]);
+  if (!customer) {
+    throw new ApiError(400, "INVALID_REFERENCE", "The selected customer does not exist");
+  }
+  if (!owner || owner.role !== "REP") {
+    throw new ApiError(400, "INVALID_REFERENCE", "The quotation owner must be a sales rep");
+  }
 
   const quotation = await prisma.quotation.create({
-    data: { customerName, repId: req.user.id },
+    data: { customerId: customer.id, customerName: customer.name, repId: owner.id },
     include: quotationInclude,
   });
   res.status(201).json({ data: quotation });
@@ -243,14 +269,21 @@ async function confirmQuotation(req, res) {
 
 async function listPendingApprovals(req, res) {
   const pagination = parsePagination(req.query);
+  const search = parseSearch(req.query.search);
   const quotationId = req.query.quotationId
     ? uuid(req.query.quotationId, "quotationId")
     : undefined;
   const candidates = await prisma.quotation.findMany({
-    where: {
+    where: combineWhere({
       status: { in: ["PENDING_MANAGER_APPROVAL", "PENDING_FINANCE_APPROVAL"] },
       ...(quotationId ? { id: quotationId } : {}),
-    },
+    }, search ? {
+      OR: [
+        { id: { contains: search, mode: "insensitive" } },
+        { customerName: { contains: search, mode: "insensitive" } },
+        { rep: { is: { name: { contains: search, mode: "insensitive" } } } },
+      ],
+    } : undefined),
     select: {
       id: true,
       status: true,

@@ -17,7 +17,7 @@ This contract covers the implemented MVP 1–4 APIs and MVP 5 customer-negotiati
 - Successful config endpoints wrap records in `{ "data": ... }`.
 - All errors use `{ "error": { "code": string, "message": string, "details"?: object } }`.
 
-Collection endpoints accept `page` and `pageSize` query parameters. Both must be positive integers, `pageSize` defaults to `20`, and the maximum is `100`. Paginated responses use:
+Collection endpoints accept `page`, `pageSize`, and an optional case-insensitive `search` query parameter. Search is limited to 100 characters and matches the identifying text fields documented by each collection. Both pagination values must be positive integers, `pageSize` defaults to `20`, and the maximum is `100`. Paginated responses use:
 
 ```json
 {
@@ -90,17 +90,32 @@ Requires any authenticated role. `200` response:
 { "user": { "id": "<uuid>", "name": "Asha Rao", "email": "asha@example.com", "role": "REP" } }
 ```
 
+## Admin user management
+
+Both endpoints require an `ADMIN` token. Password hashes are never returned.
+
+- `GET /api/users?page=1&pageSize=20&search=asha&role=REP` returns paginated internal users. Search matches name or email; `role` optionally accepts `ADMIN`, `REP`, `MANAGER`, or `FINANCE`.
+- `POST /api/users` creates a managed internal account and returns `201 { "data": User }`.
+
+Create body:
+
+```json
+{ "name": "Asha Rao", "email": "asha@example.com", "password": "initial-password", "role": "REP" }
+```
+
+An administrator can create `REP`, `MANAGER`, and `FINANCE` accounts. Additional `ADMIN` accounts remain system-provisioned to preserve the single-admin rule.
+
 ## Admin configuration
 
 Every endpoint in this section requires authentication. Mutating endpoints and all non-product configuration reads require `ADMIN`; authenticated product reads are also available to reps for the quotation builder. Missing/invalid tokens return `401 UNAUTHENTICATED`, and insufficient roles return `403 FORBIDDEN`.
 
 ### `GET /api/config-options`
 
-Returns the canonical values and display labels for configuration forms to any authenticated user. The response is `{ "data": { productCategories, productUnits, customerTiers, currencies, billingTypes, billingCycles } }`; every collection contains `{ "value", "label" }` objects.
+Returns the canonical values and display labels for configuration forms to any authenticated user. The response is `{ "data": { productCategories, productUnits, customerTiers, currencies, billingTypes, billingCycles, userRoles } }`; every collection contains `{ "value", "label" }` objects. `userRoles` contains the non-admin roles an administrator may provision.
 
 ### Products
 
-- `GET /api/products?page=1&pageSize=20` → paginated `Product[]` (any authenticated role)
+- `GET /api/products?page=1&pageSize=20&search=hardware` → paginated `Product[]` (any authenticated role); searches name, description, category, and unit
 - `GET /api/products/:id` → `200 { "data": Product }` (any authenticated role)
 - `POST /api/products` → `201 { "data": Product }`
 
@@ -114,7 +129,7 @@ Create body:
 
 ### Price lists
 
-- `GET /api/pricelists?page=1&pageSize=20` → paginated `PriceList[]`
+- `GET /api/pricelists?page=1&pageSize=20&search=gold` → paginated `PriceList[]`; searches name, customer tier, and currency
 - `GET /api/pricelists/:id` → `200 { "data": PriceList }`
 - `POST /api/pricelists` → `201 { "data": PriceList }`
 
@@ -122,7 +137,7 @@ Create body: `{ "name": "Gold USD", "customerTier": "GOLD", "currency": "USD" }`
 
 ### Warehouses
 
-- `GET /api/warehouses?page=1&pageSize=20` → paginated `Warehouse[]`
+- `GET /api/warehouses?page=1&pageSize=20&search=bengaluru` → paginated `Warehouse[]`; searches name and location
 - `GET /api/warehouses/:id` → `200 { "data": Warehouse }`
 - `POST /api/warehouses` → `201 { "data": Warehouse }`
 
@@ -148,7 +163,7 @@ Request:
 
 ### Discount tiers
 
-- `GET /api/discount-tiers?page=1&pageSize=20` → paginated `DiscountTier[]`
+- `GET /api/discount-tiers?page=1&pageSize=20&search=standard` → paginated `DiscountTier[]`; searches tier name
 - `GET /api/discount-tiers/:id` → `200 { "data": DiscountTier }`
 - `POST /api/discount-tiers` → `201 { "data": DiscountTier }`
 
@@ -166,11 +181,17 @@ Create body:
 
 ## Quotations
 
+### Customer selection
+
+`GET /api/customers?page=1&pageSize=20&search=acme` requires an internal `REP` or `ADMIN` token and returns a paginated collection of `{ id, name, email, createdAt }`. Search matches customer name or email. Password data is never returned. Reps and admins use this endpoint to select an existing portal customer while creating a quotation.
+
+`POST /api/customers` requires `ADMIN` and accepts `{ "name", "email", "password" }`. It creates a portal customer with an initial password and returns `201 { "data": Customer }` without a password hash. The customer can subsequently use the normal portal login.
+
 All quotation routes require authentication. A `REP` sees only their own quotations; `ADMIN`, `MANAGER`, and `FINANCE` can read all quotations. Creation is restricted to `REP`; editing and confirmation are restricted to the owning rep or an admin.
 
-- `GET /api/quotations?page=1&pageSize=20&status=APPROVED` → paginated `Quotation[]`. `status` is optional and accepts one status or a comma-separated list.
+- `GET /api/quotations?page=1&pageSize=20&status=APPROVED&search=acme` → paginated `Quotation[]`. `status` is optional and accepts one status or a comma-separated list. Search matches quotation ID, customer name, and representative name/email.
 - `GET /api/quotations/:id` → `{ "data": Quotation }`
-- `POST /api/quotations`, body `{ "customerName": string }` → draft quotation; `repId` comes from the token.
+- `POST /api/quotations` → draft quotation. A REP sends `{ "customerId": "<customer-uuid>" }`; an ADMIN sends `{ "customerId": "<customer-uuid>", "repId": "<rep-user-uuid>" }`. `customerName` is copied from the selected customer. Admin-created quotations must be assigned to a user whose role is `REP`. Unknown or invalid references return `400 INVALID_REFERENCE`.
 - `PUT /api/quotations/:id`, body `{ "lines": [{ "productId": string, "qty": integer, "discountPercent": decimal }] }` → replaces lines and returns server-recomputed totals.
 - `POST /api/quotations/:id/confirm` → submits a draft through discount governance and persists `blendedRiskScore`.
 
@@ -187,6 +208,7 @@ Quotation responses include `lines` and use this shape:
 ```json
 {
   "id": "<uuid>",
+  "customerId": "<uuid>",
   "customerName": "Acme Corp",
   "repId": "<uuid>",
   "status": "DRAFT",
@@ -195,6 +217,7 @@ Quotation responses include `lines` and use this shape:
   "grandTotal": "2338.20",
   "blendedRiskScore": "8",
   "rep": { "id": "<uuid>", "name": "Asha Rao", "email": "asha@example.com", "role": "REP" },
+  "customer": { "id": "<uuid>", "name": "Acme Corp", "email": "buyer@acme.example" },
   "lines": [{ "id": "<uuid>", "quotationId": "<uuid>", "productId": "<uuid>", "qty": 2, "unitPrice": "1299.00", "discountPercent": "10", "lineTotal": "2338.20", "billingType": "ONE_TIME", "billingCycle": null, "subscriptionStartDate": null, "product": { "...": "Product fields" } }],
   "createdAt": "<iso-date>",
   "updatedAt": "<iso-date>"
@@ -207,7 +230,7 @@ All approval endpoints require authentication. Action endpoints allow `MANAGER` 
 
 ### `GET /api/quotations/pending`
 
-Accepts `page` and `pageSize` and returns a paginated quotation collection. Managers receive manager-first work, including high-risk quotes that will subsequently need Finance. Finance receives high-risk quotes only after Manager approval. Other roles receive `403 FORBIDDEN`. `quotationId` is an optional exact lookup used by the approval detail screen to verify its assignment without loading the entire queue.
+Accepts `page`, `pageSize`, and `search` and returns a paginated quotation collection. Search matches quotation ID, customer name, or representative name. Managers receive manager-first work, including high-risk quotes that will subsequently need Finance. Finance receives high-risk quotes only after Manager approval. Other roles receive `403 FORBIDDEN`. `quotationId` is an optional exact lookup used by the approval detail screen to verify its assignment without loading the entire queue.
 
 ### `POST /api/quotations/:id/approve`
 
@@ -487,9 +510,9 @@ These routes require an internal JWT. A customer token returns `401 UNAUTHENTICA
 
 ### `POST /api/quotations/:id/send-to-customer` — INTERNAL: REP, MANAGER, ADMIN
 
-Request: either `{ "customerId": "<uuid>" }`, `{ "customerEmail": "customer@example.test" }`, or `{}` when the quotation already has a linked customer.
+Request: `{}`. The endpoint uses the customer linked when the quotation was created. For historical unlinked quotations only, `{ "customerId": "<uuid>" }` or `{ "customerEmail": "customer@example.test" }` remains available as a migration fallback.
 
-The owning REP, a MANAGER, or ADMIN can send an `APPROVED` quotation. The endpoint resolves the linked customer by ID or portal-account email, records access time and an audit event, changes status to `SENT_TO_CUSTOMER`, and sends the customer a direct portal link through configured SMTP.
+The owning REP, a MANAGER, or ADMIN can send an `APPROVED` quotation. The endpoint uses the existing customer link, records access time and an audit event, changes status to `SENT_TO_CUSTOMER`, and sends the customer a direct portal link through configured SMTP. A request body cannot replace a customer that is already linked.
 
 Returns `{ "data": { ...quotation }, "emailDelivery": { "status": "SENT", "messageId": "..." } }`. Email status can be `SKIPPED` when SMTP is not configured or `FAILED` when the SMTP provider rejects delivery; the quotation remains available in the customer's portal in either case.
 
@@ -513,7 +536,7 @@ All `/api/portal/*` routes require a customer JWT. Queries are scoped by both qu
 
 ### `GET /api/portal/quotations` — CUSTOMER ONLY
 
-Accepts `page` and `pageSize` and returns the authenticated customer's shared quotations as a paginated collection, newest activity first. Each item contains safe summary fields, totals, timestamps, and line/comment counts. Customers never need to enter or share a quotation ID manually.
+Accepts `page`, `pageSize`, and `search` and returns the authenticated customer's shared quotations as a paginated collection, newest activity first. Search matches quotation ID or customer name. Each item contains safe summary fields, totals, timestamps, and line/comment counts. Customers never need to enter or share a quotation ID manually.
 
 ### `GET /api/portal/quotations/:id` — CUSTOMER ONLY
 

@@ -23,4 +23,8 @@ export const configApi = {
   createWarehouse: body => create('/api/warehouses', body),
   listDiscountTiers: params => list('/api/discount-tiers', params),
   createDiscountTier: body => create('/api/discount-tiers', body),
+  listUsers: params => list('/api/users', params),
+  createUser: body => create('/api/users', body),
+  listCustomers: params => list('/api/customers', params),
+  createCustomer: body => create('/api/customers', body),
 }

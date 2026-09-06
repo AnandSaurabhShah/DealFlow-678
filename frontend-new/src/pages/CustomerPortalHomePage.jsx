@@ -4,14 +4,18 @@ import { getApiError } from '../api/client'
 import Icon from '../components/Icon'
 import StatusBadge from '../components/StatusBadge'
 import Pagination from '../components/Pagination'
+import SearchInput from '../components/SearchInput'
 import { usePortalQuotations } from '../hooks/usePortalQueries'
+import { useDebouncedValue } from '../hooks/useDebouncedValue'
 import { formatDate, formatMoney, shortId } from '../lib/format'
 
 export default function CustomerPortalHomePage() {
   const navigate = useNavigate()
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(20)
-  const quotations = usePortalQuotations({ page, pageSize })
+  const [search, setSearch] = useState('')
+  const debouncedSearch = useDebouncedValue(search)
+  const quotations = usePortalQuotations({ page, pageSize, search: debouncedSearch })
   const items = quotations.data?.items || []
 
   return <section className="mx-auto max-w-4xl pt-6">
@@ -20,6 +24,7 @@ export default function CustomerPortalHomePage() {
       <h1 className="mt-5 font-display text-3xl font-bold text-slate-900">Your quotations</h1>
       <p className="mx-auto mt-2 max-w-md text-sm text-slate-500">Quotations shared with your account appear here automatically. We’ll also email you a direct link when a new one is ready.</p>
     </div>
+    <SearchInput value={search} onChange={value => { setSearch(value); setPage(1) }} placeholder="Search your quotation ID…" className="mx-auto mt-7 max-w-xl" />
 
     {quotations.isLoading && <div className="mt-8 h-48 animate-pulse rounded-2xl bg-slate-200" />}
     {quotations.isError && <p role="alert" className="mt-8 rounded-xl bg-red-50 p-4 text-sm text-red-700">{getApiError(quotations.error, 'Unable to load your quotations')}</p>}

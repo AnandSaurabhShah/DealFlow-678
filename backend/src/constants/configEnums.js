@@ -21,6 +21,11 @@ const definitions = {
     ["RECURRING", "Recurring"],
   ],
   billingCycles: [["MONTHLY", "Monthly"]],
+  userRoles: [
+    ["REP", "Sales rep"],
+    ["MANAGER", "Sales manager"],
+    ["FINANCE", "Finance"],
+  ],
 };
 
 const aliases = {
@@ -59,4 +64,12 @@ function publicConfigOptions() {
   );
 }
 
-module.exports = { enumValue, publicConfigOptions, valuesFor };
+function matchingValues(key, search) {
+  const term = String(search).trim().toLowerCase();
+  if (!term) return [];
+  return definitions[key]
+    .filter(([value, label]) => value.toLowerCase().includes(term) || label.toLowerCase().includes(term))
+    .map(([value]) => value);
+}
+
+module.exports = { enumValue, matchingValues, publicConfigOptions, valuesFor };

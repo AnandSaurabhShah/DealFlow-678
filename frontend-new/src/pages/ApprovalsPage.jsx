@@ -4,13 +4,17 @@ import { getApiError } from '../api/client'
 import Icon from '../components/Icon'
 import StatusBadge from '../components/StatusBadge'
 import Pagination from '../components/Pagination'
+import SearchInput from '../components/SearchInput'
 import { usePendingApprovals } from '../hooks/useApiQueries'
+import { useDebouncedValue } from '../hooks/useDebouncedValue'
 import { formatDate, formatMoney, shortId } from '../lib/format'
 
 export default function ApprovalsPage() {
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(20)
-  const approvals = usePendingApprovals({ page, pageSize })
+  const [search, setSearch] = useState('')
+  const debouncedSearch = useDebouncedValue(search)
+  const approvals = usePendingApprovals({ page, pageSize, search: debouncedSearch })
   const navigate = useNavigate()
   const items = approvals.data?.items || []
   const pagination = approvals.data?.pagination
@@ -23,6 +27,7 @@ export default function ApprovalsPage() {
       </div>
       <button onClick={() => approvals.refetch()} disabled={approvals.isFetching} className="rounded-lg border border-slate-200 px-3 py-2 text-[11px] font-semibold disabled:opacity-50">{approvals.isFetching ? 'Refreshing…' : 'Refresh'}</button>
     </div>
+    <div className="border-t border-slate-100 p-4"><SearchInput value={search} onChange={value => { setSearch(value); setPage(1) }} placeholder="Search customer, quote ID, or owner…" /></div>
 
     {approvals.isLoading && <ApprovalSkeleton />}
     {approvals.isError && <div role="alert" className="grid min-h-72 place-items-center px-5 text-center text-sm text-red-600">{approvals.error.response?.status === 403 ? 'You do not have permission to view pending approvals.' : getApiError(approvals.error, 'Unable to load pending approvals')}</div>}

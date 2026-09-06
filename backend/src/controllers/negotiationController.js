@@ -6,6 +6,7 @@ const { calculateLineTotal, calculateQuotationTotals } = require("../services/qu
 const { evaluateGovernance } = require("../services/governanceService");
 const { sendQuotationEmail } = require("../services/quotationMailer");
 const { parsePagination, paginationMeta } = require("../utils/pagination");
+const { combineWhere, parseSearch } = require("../utils/search");
 const {
   shapeComment,
   shapeInternalEvent,
@@ -117,7 +118,7 @@ async function sendToCustomer(req, res) {
       throw new ApiError(409, "BILLING_ALREADY_GENERATED", "A quotation with generated billing cannot enter negotiation");
     }
 
-    const requestedCustomerId = req.body?.customerId || quotation.customerId;
+    const requestedCustomerId = quotation.customerId || req.body?.customerId;
     const requestedCustomerEmail = req.body?.customerEmail
       ? String(req.body.customerEmail).trim().toLowerCase()
       : null;
@@ -178,7 +179,16 @@ async function sendToCustomer(req, res) {
 
 async function listPortalQuotations(req, res) {
   const pagination = parsePagination(req.query);
-  const where = { customerId: req.customer.id, sentToCustomerAt: { not: null } };
+  const search = parseSearch(req.query.search);
+  const where = combineWhere(
+    { customerId: req.customer.id, sentToCustomerAt: { not: null } },
+    search ? {
+      OR: [
+        { id: { contains: search, mode: "insensitive" } },
+        { customerName: { contains: search, mode: "insensitive" } },
+      ],
+    } : undefined,
+  );
   const [quotations, total] = await Promise.all([
     prisma.quotation.findMany({
       where,

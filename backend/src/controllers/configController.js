@@ -1,7 +1,8 @@
 const prisma = require("../config/prisma");
 const { requireFields, decimalString, integer } = require("../utils/validation");
 const { parsePagination, paginationMeta } = require("../utils/pagination");
-const { enumValue, publicConfigOptions } = require("../constants/configEnums");
+const { combineWhere, parseSearch } = require("../utils/search");
+const { enumValue, matchingValues, publicConfigOptions } = require("../constants/configEnums");
 
 async function getConfigOptions(_req, res) {
   res.json({ data: publicConfigOptions() });
@@ -9,20 +10,37 @@ async function getConfigOptions(_req, res) {
 
 async function paginatedList(req, res, model, options = {}) {
   const pagination = parsePagination(req.query);
+  const search = parseSearch(req.query.search);
+  const { searchFields = [], enumSearch = {}, ...queryOptions } = options;
+  const searchConditions = searchFields.map((field) => ({
+    [field]: { contains: search, mode: "insensitive" },
+  }));
+  Object.entries(enumSearch).forEach(([field, definition]) => {
+    const values = matchingValues(definition, search);
+    if (values.length) searchConditions.push({ [field]: { in: values } });
+  });
+  const where = combineWhere(
+    queryOptions.where,
+    search ? { OR: searchConditions } : undefined,
+  );
   const [data, total] = await Promise.all([
     model.findMany({
-      ...options,
+      ...queryOptions,
+      where,
       skip: pagination.skip,
       take: pagination.take,
-      orderBy: options.orderBy || [{ createdAt: "desc" }, { id: "desc" }],
+      orderBy: queryOptions.orderBy || [{ createdAt: "desc" }, { id: "desc" }],
     }),
-    model.count({ where: options.where }),
+    model.count({ where }),
   ]);
   res.json({ data, pagination: paginationMeta(total, pagination) });
 }
 
 async function listProducts(req, res) {
-  return paginatedList(req, res, prisma.product);
+  return paginatedList(req, res, prisma.product, {
+    searchFields: ["name", "description"],
+    enumSearch: { category: "productCategories", unit: "productUnits" },
+  });
 }
 
 async function getProduct(req, res) {
@@ -52,7 +70,10 @@ async function createProduct(req, res) {
 }
 
 async function listPriceLists(req, res) {
-  return paginatedList(req, res, prisma.priceList);
+  return paginatedList(req, res, prisma.priceList, {
+    searchFields: ["name"],
+    enumSearch: { customerTier: "customerTiers", currency: "currencies" },
+  });
 }
 
 async function getPriceList(req, res) {
@@ -75,6 +96,7 @@ const warehouseInclude = { stockLevels: { include: { product: true } } };
 
 async function listWarehouses(req, res) {
   return paginatedList(req, res, prisma.warehouse, {
+    searchFields: ["name", "location"],
     select: {
       id: true,
       name: true,
@@ -145,7 +167,7 @@ async function restockWarehouse(req, res) {
 const tierInclude = { categoryOverrides: true };
 
 async function listDiscountTiers(req, res) {
-  return paginatedList(req, res, prisma.discountTier);
+  return paginatedList(req, res, prisma.discountTier, { searchFields: ["tierName"] });
 }
 
 async function getDiscountTier(req, res) {

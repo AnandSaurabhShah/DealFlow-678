@@ -21,6 +21,11 @@ export const defaultConfigOptions = {
     { value: 'RECURRING', label: 'Recurring' },
   ],
   billingCycles: [{ value: 'MONTHLY', label: 'Monthly' }],
+  userRoles: [
+    { value: 'REP', label: 'Sales rep' },
+    { value: 'MANAGER', label: 'Sales manager' },
+    { value: 'FINANCE', label: 'Finance' },
+  ],
 }
 
 const labels = Object.fromEntries(

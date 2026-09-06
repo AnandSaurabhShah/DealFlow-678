@@ -2,12 +2,13 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { configApi } from '../api/config'
 import { billingApi } from '../api/billing'
 import { quotationApi } from '../api/quotations'
+import { customerApi } from '../api/customers'
 import { useAuthStore } from '../store/authStore'
 
-export function useProducts({ page = 1, pageSize = 20 } = {}) {
+export function useProducts({ page = 1, pageSize = 20, search = '' } = {}) {
   return useQuery({
-    queryKey: ['products', page, pageSize],
-    queryFn: () => configApi.listProducts({ page, pageSize }),
+    queryKey: ['products', page, pageSize, search],
+    queryFn: () => configApi.listProducts({ page, pageSize, ...(search ? { search } : {}) }),
     placeholderData: previousData => previousData,
   })
 }
@@ -20,11 +21,28 @@ export function useConfigOptions() {
   })
 }
 
-export function useQuotations({ page = 1, pageSize = 20, status } = {}) {
+export function useCustomers({ page = 1, pageSize = 20, search = '' } = {}) {
+  return useQuery({
+    queryKey: ['customers', page, pageSize, search],
+    queryFn: () => customerApi.list({ page, pageSize, ...(search ? { search } : {}) }),
+    placeholderData: previousData => previousData,
+  })
+}
+
+export function useUsers({ page = 1, pageSize = 20, search = '', role, enabled = true } = {}) {
+  return useQuery({
+    queryKey: ['users', page, pageSize, search, role || 'ALL'],
+    queryFn: () => configApi.listUsers({ page, pageSize, ...(search ? { search } : {}), ...(role ? { role } : {}) }),
+    enabled,
+    placeholderData: previousData => previousData,
+  })
+}
+
+export function useQuotations({ page = 1, pageSize = 20, status, search = '' } = {}) {
   const userId = useAuthStore(state => state.user?.id)
   return useQuery({
-    queryKey: ['quotations', userId, page, pageSize, status || 'ALL'],
-    queryFn: () => quotationApi.list({ page, pageSize, ...(status ? { status } : {}) }),
+    queryKey: ['quotations', userId, page, pageSize, status || 'ALL', search],
+    queryFn: () => quotationApi.list({ page, pageSize, ...(status ? { status } : {}), ...(search ? { search } : {}) }),
     enabled: Boolean(userId),
     placeholderData: previousData => previousData,
   })
@@ -38,11 +56,11 @@ export function useQuotation(id) {
   })
 }
 
-export function usePendingApprovals({ page = 1, pageSize = 20, quotationId } = {}) {
+export function usePendingApprovals({ page = 1, pageSize = 20, quotationId, search = '' } = {}) {
   const user = useAuthStore(state => state.user)
   return useQuery({
-    queryKey: ['pendingApprovals', user?.id, page, pageSize, quotationId || 'ALL'],
-    queryFn: () => quotationApi.pending({ page, pageSize, ...(quotationId ? { quotationId } : {}) }),
+    queryKey: ['pendingApprovals', user?.id, page, pageSize, quotationId || 'ALL', search],
+    queryFn: () => quotationApi.pending({ page, pageSize, ...(quotationId ? { quotationId } : {}), ...(search ? { search } : {}) }),
     enabled: Boolean(user?.id && ['MANAGER', 'FINANCE'].includes(user.role)),
     placeholderData: previousData => previousData,
   })
@@ -208,12 +226,14 @@ export function usePayInvoice() {
   })
 }
 
-export function useAdminConfig(active = 'products', page = 1, pageSize = 20) {
+export function useAdminConfig(active = 'products', page = 1, pageSize = 20, search = '') {
   const isAdmin = useAuthStore(state => state.user?.role === 'ADMIN')
   return {
-    products: useQuery({ queryKey: ['products', page, pageSize], queryFn: () => configApi.listProducts({ page, pageSize }), enabled: isAdmin && active === 'products', placeholderData: previousData => previousData }),
-    priceLists: useQuery({ queryKey: ['priceLists', page, pageSize], queryFn: () => configApi.listPriceLists({ page, pageSize }), enabled: isAdmin && active === 'priceLists', placeholderData: previousData => previousData }),
-    warehouses: useQuery({ queryKey: ['warehouses', page, pageSize], queryFn: () => configApi.listWarehouses({ page, pageSize }), enabled: isAdmin && active === 'warehouses', placeholderData: previousData => previousData }),
-    discountTiers: useQuery({ queryKey: ['discountTiers', page, pageSize], queryFn: () => configApi.listDiscountTiers({ page, pageSize }), enabled: isAdmin && active === 'discountTiers', placeholderData: previousData => previousData }),
+    products: useQuery({ queryKey: ['products', page, pageSize, search], queryFn: () => configApi.listProducts({ page, pageSize, ...(search ? { search } : {}) }), enabled: isAdmin && active === 'products', placeholderData: previousData => previousData }),
+    priceLists: useQuery({ queryKey: ['priceLists', page, pageSize, search], queryFn: () => configApi.listPriceLists({ page, pageSize, ...(search ? { search } : {}) }), enabled: isAdmin && active === 'priceLists', placeholderData: previousData => previousData }),
+    warehouses: useQuery({ queryKey: ['warehouses', page, pageSize, search], queryFn: () => configApi.listWarehouses({ page, pageSize, ...(search ? { search } : {}) }), enabled: isAdmin && active === 'warehouses', placeholderData: previousData => previousData }),
+    discountTiers: useQuery({ queryKey: ['discountTiers', page, pageSize, search], queryFn: () => configApi.listDiscountTiers({ page, pageSize, ...(search ? { search } : {}) }), enabled: isAdmin && active === 'discountTiers', placeholderData: previousData => previousData }),
+    users: useQuery({ queryKey: ['users', page, pageSize, search, 'ALL'], queryFn: () => configApi.listUsers({ page, pageSize, ...(search ? { search } : {}) }), enabled: isAdmin && active === 'users', placeholderData: previousData => previousData }),
+    customers: useQuery({ queryKey: ['customers', page, pageSize, search], queryFn: () => configApi.listCustomers({ page, pageSize, ...(search ? { search } : {}) }), enabled: isAdmin && active === 'customers', placeholderData: previousData => previousData }),
   }
 }

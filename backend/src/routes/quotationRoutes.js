@@ -41,7 +41,7 @@ router.get(
   asyncHandler(controller.checkFulfillmentBackorder),
 );
 router.get("/:id", asyncHandler(controller.getQuotation));
-router.post("/", authorize("REP"), asyncHandler(controller.createQuotation));
+router.post("/", authorize("REP", "ADMIN"), asyncHandler(controller.createQuotation));
 router.put("/:id", authorize("REP", "ADMIN"), asyncHandler(controller.replaceQuotationLines));
 router.post("/:id/confirm", authorize("REP", "ADMIN"), asyncHandler(controller.confirmQuotation));
 router.post(

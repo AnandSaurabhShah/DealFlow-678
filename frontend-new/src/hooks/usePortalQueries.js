@@ -1,10 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { portalApi } from '../api/portal'
 
-export function usePortalQuotations({ page = 1, pageSize = 20 } = {}) {
+export function usePortalQuotations({ page = 1, pageSize = 20, search = '' } = {}) {
   return useQuery({
-    queryKey: ['portalQuotations', page, pageSize],
-    queryFn: () => portalApi.listQuotations({ page, pageSize }),
+    queryKey: ['portalQuotations', page, pageSize, search],
+    queryFn: () => portalApi.listQuotations({ page, pageSize, ...(search ? { search } : {}) }),
     placeholderData: previousData => previousData,
   })
 }
