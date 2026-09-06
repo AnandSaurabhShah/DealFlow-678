@@ -23,10 +23,17 @@ function getRequiredApproverRole(quotation) {
 }
 
 function getStatusAfterApproval(quotation, actorRole) {
-  if (actorRole === "FINANCE") return "APPROVED";
-  return quotation.blendedRiskScore.greaterThan(FINANCE_THRESHOLD)
-    ? "PENDING_FINANCE_APPROVAL"
-    : "APPROVED";
+  const approvalStatus = actorRole === "FINANCE"
+    ? "APPROVED"
+    : quotation.blendedRiskScore.greaterThan(FINANCE_THRESHOLD)
+      ? "PENDING_FINANCE_APPROVAL"
+      : "APPROVED";
+
+  // Approval before a quote is shared makes it ready for the customer.
+  // Approval after the customer accepts negotiated terms finalizes the quote.
+  return approvalStatus === "APPROVED" && quotation.sentToCustomerAt
+    ? "CONFIRMED"
+    : approvalStatus;
 }
 
 module.exports = {

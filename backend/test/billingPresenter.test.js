@@ -21,7 +21,7 @@ test("separates mixed quotation billing into authoritative frontend sections", (
   const result = shapeBillingResponse({
     id: "quote-1",
     customerName: "Mixed Billing Customer",
-    status: "APPROVED",
+    status: "CONFIRMED",
     lines: [recurringLine, oneTimeLine],
     invoices: [recurringInvoice, oneTimeInvoice],
   });

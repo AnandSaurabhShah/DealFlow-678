@@ -234,7 +234,7 @@ Accepts `page`, `pageSize`, and `search` and returns a paginated quotation colle
 
 ### `POST /api/quotations/:id/approve`
 
-No request body is required. Manager approval moves a moderate-risk quotation to `APPROVED`; high-risk quotations remain `PENDING_FINANCE_APPROVAL` and become available to Finance. Finance approval moves the quotation to `APPROVED`.
+No request body is required. Before customer sharing, final approval moves a quotation to `APPROVED`, which means it is ready to send. If approval was re-entered after customer acceptance, the final required approval moves it to `CONFIRMED`. High-risk quotations remain `PENDING_FINANCE_APPROVAL` after manager approval and then become available to Finance.
 
 `200` response: `{ "data": Quotation }`.
 
@@ -278,7 +278,7 @@ An unknown quotation returns `404 NOT_FOUND`; a rep requesting another rep's his
 
 ## Fulfillment
 
-Fulfillment endpoints require a quotation with status `APPROVED`. They are available to the quotation's owning `REP` and to `ADMIN`. Other roles receive `403 FORBIDDEN`; attempting to fulfill a quotation in another state returns `409 INVALID_QUOTATION_STATUS`.
+Fulfillment endpoints require a quotation with status `CONFIRMED`, meaning the customer accepted the terms and any resulting approval round is complete. They are available to the quotation's owning `REP` and to `ADMIN`. Other roles receive `403 FORBIDDEN`; attempting to fulfill a quotation in another state returns `409 INVALID_QUOTATION_STATUS`.
 
 ### `GET /api/quotations/:id/fulfillment/suggest`
 
@@ -327,7 +327,7 @@ Relevant errors:
 - `400 INVALID_REFERENCE` when a warehouse does not exist.
 - `409 FULFILLMENT_OVER_ALLOCATION` when product allocations exceed the ordered quantity.
 - `409 INSUFFICIENT_STOCK` when current warehouse stock cannot cover an allocation.
-- `409 INVALID_QUOTATION_STATUS` unless the quotation is currently `APPROVED`.
+- `409 INVALID_QUOTATION_STATUS` unless the quotation is currently `CONFIRMED`.
 
 ### `GET /api/quotations/:id/fulfillment/backorder-check`
 
@@ -365,7 +365,7 @@ Calling this endpoint before the quotation reaches `FULFILLED` returns `409 INVA
 
 Billing reads are available to the same authenticated users who can read a quotation. Billing mutations are restricted to the quotation's owning `REP` and `ADMIN`.
 
-Billing is generated explicitly once while the quotation is `APPROVED`, before warehouse fulfillment. After generation, recurring quantity changes and cancellation remain available when the quotation is `APPROVED` or `FULFILLED`.
+Billing is generated explicitly once only after the customer has confirmed the quotation. Generation and later recurring adjustments are available while the quotation is `CONFIRMED` or `FULFILLED`; fulfillment itself can only start from `CONFIRMED`, so `FULFILLED` is always downstream of customer acceptance.
 
 ### `GET /api/quotations/:id/billing`
 
@@ -379,7 +379,7 @@ records. Schedule entries and credit notes stay nested under their recurring lin
   "data": {
     "quotationId": "<uuid>",
     "customerName": "Acme Corp",
-    "status": "APPROVED",
+    "status": "CONFIRMED",
     "oneTimeLines": [
       {
         "id": "<line-uuid>",
@@ -415,7 +415,7 @@ records. Schedule entries and credit notes stay nested under their recurring lin
 
 No body is required. Creates one aggregate `ONE_TIME` invoice for all one-time lines and four monthly schedule entries per recurring line: one immediately and three future entries. It also sets each recurring line's `subscriptionStartDate`.
 
-Returns `201` with the same billing shape as the GET endpoint. Calling it again returns `409 BILLING_ALREADY_GENERATED`. A quotation that is not currently `APPROVED` returns `409 INVALID_QUOTATION_STATUS`.
+Returns `201` with the same billing shape as the GET endpoint. Calling it again returns `409 BILLING_ALREADY_GENERATED`. A quotation that is not currently `CONFIRMED` or `FULFILLED` returns `409 INVALID_QUOTATION_STATUS`.
 
 ### `PUT /api/quotations/:id/lines/:lineId/quantity`
 
@@ -558,9 +558,10 @@ Valid range is 0–100. The line must belong to the scoped quotation. The transa
 
 No request body is required. The transaction recalculates totals and blended risk using the existing MVP2 governance service, increments the approval round, records audit events, and returns the updated customer-safe quotation.
 
-- Within-limit terms → `APPROVED`.
+- Within-limit terms → `CONFIRMED` immediately.
 - Moderate over-limit terms → `PENDING_MANAGER_APPROVAL`.
 - High-risk terms → `PENDING_FINANCE_APPROVAL`, but manager-first routing assigns the new approval round to MANAGER before FINANCE.
+- The final required internal approval after customer acceptance → `CONFIRMED`, not `APPROVED`.
 - A repeated confirm after leaving the negotiable state returns `409 QUOTATION_NOT_NEGOTIABLE`.
 
 Relevant portal errors: `400 VALIDATION_ERROR`, `400 INVALID_QUOTATION_LINE`, `401 CUSTOMER_UNAUTHENTICATED`, `401 CUSTOMER_AUTH_FAILED`, `404 CUSTOMER_QUOTATION_NOT_FOUND`, `409 QUOTATION_NOT_NEGOTIABLE`, `409 NEGOTIATION_CONFLICT`, `409 DISCOUNT_TIER_REQUIRED`, `429 CUSTOMER_AUTH_RATE_LIMITED`, and `429 PORTAL_RATE_LIMITED`.

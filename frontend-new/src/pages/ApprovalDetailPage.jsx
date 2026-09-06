@@ -33,8 +33,8 @@ export default function ApprovalDetailPage() {
   const quote = quotation.data
   const isReviewer = ['MANAGER', 'FINANCE'].includes(user.role)
   const canManageFulfillment = user.role === 'ADMIN' || (user.role === 'REP' && quote.repId === user.id)
-  const showFulfillmentAction = canManageFulfillment && ['APPROVED', 'FULFILLED'].includes(quote.status)
-  const showBillingAction = showFulfillmentAction
+  const showFulfillmentAction = canManageFulfillment && ['CONFIRMED', 'FULFILLED'].includes(quote.status)
+  const showBillingAction = canManageFulfillment && ['CONFIRMED', 'FULFILLED'].includes(quote.status)
   const assignedToUser = isReviewer && pending.isSuccess && pending.data.items.some(item => item.id === quote.id)
   const mutations = [approve, reject, returnForRevision]
   const activeMutation = mutations.find(mutation => mutation.isPending)

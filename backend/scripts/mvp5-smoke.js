@@ -88,12 +88,11 @@ async function main() {
     body: JSON.stringify({ customerId: customerA.id }),
   });
   expect(otherRepDenied.status === 403, "A REP sent another REP's quotation");
-  const billingBlocked = await request("/api/quotations/00000000-0000-4000-8000-000000000502/send-to-customer", {
+  const billingBlocked = await request(`/api/quotations/${quoteAOver}/billing/generate`, {
     method: "POST",
     headers: auth(repToken),
-    body: JSON.stringify({ customerId: customerA.id }),
   });
-  expect(billingBlocked.status === 409 && billingBlocked.body.error.code === "BILLING_ALREADY_GENERATED", "Generated billing entered negotiation");
+  expect(billingBlocked.status === 409 && billingBlocked.body.error.code === "INVALID_QUOTATION_STATUS", "Billing was generated before customer confirmation");
   const sent = await request(`/api/quotations/${quoteAOver}/send-to-customer`, {
     method: "POST",
     headers: auth(repToken),
@@ -199,7 +198,7 @@ async function main() {
     headers: auth(managerToken),
     body: JSON.stringify({}),
   });
-  expect(approved.status === 200 && approved.body.data.status === "APPROVED", "Manager could not approve customer request");
+  expect(approved.status === 200 && approved.body.data.status === "CONFIRMED", "Manager approval did not finalize the customer-confirmed request");
 
   const sentWithin = await request(`/api/quotations/${quoteAWithin}/send-to-customer`, {
     method: "POST",
@@ -218,7 +217,7 @@ async function main() {
     headers: auth(customerAToken),
     body: JSON.stringify({}),
   });
-  expect(withinConfirmed.status === 200 && withinConfirmed.body.data.status === "APPROVED", "Within-limit request entered unnecessary approval");
+  expect(withinConfirmed.status === 200 && withinConfirmed.body.data.status === "CONFIRMED", "Within-limit request did not become confirmed");
 
   const serviceProduct = await prisma.product.findFirstOrThrow({ where: { name: "On-site Setup Service" } });
   const highCreated = await request("/api/quotations", {
@@ -275,7 +274,7 @@ async function main() {
     headers: auth(financeToken),
     body: JSON.stringify({}),
   });
-  expect(highFinanceApproval.body.data.status === "APPROVED", "Finance could not complete high-risk request");
+  expect(highFinanceApproval.body.data.status === "CONFIRMED", "Finance approval did not finalize the customer-confirmed request");
 
   const events = await prisma.negotiationEvent.findMany({ where: { quotationId: quoteAOver } });
   expect(events.some((event) => event.action === "DISCOUNT_UPDATED"), "Discount audit event is missing");

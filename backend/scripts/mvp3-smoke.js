@@ -29,7 +29,7 @@ async function login(email, password) {
   return response.body.token;
 }
 
-async function createApprovedQuotation(token, productId, qty, label) {
+async function createConfirmedQuotation(token, customerToken, productId, qty, label) {
   const headers = { authorization: `Bearer ${token}` };
   const created = await request("/api/quotations", {
     method: "POST",
@@ -51,14 +51,38 @@ async function createApprovedQuotation(token, productId, qty, label) {
   });
   expect(submitted.status === 200, `Could not submit the ${label} quotation`);
   expect(submitted.body.data.status === "APPROVED", `${label} quotation was not approved`);
-  return submitted.body.data;
+
+  const sent = await request(`/api/quotations/${created.body.data.id}/send-to-customer`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({}),
+  });
+  expect(sent.status === 200, `Could not send the ${label} quotation`);
+  const confirmed = await request(`/api/portal/quotations/${created.body.data.id}/confirm`, {
+    method: "POST",
+    headers: { authorization: `Bearer ${customerToken}` },
+    body: JSON.stringify({}),
+  });
+  expect(confirmed.status === 200, `Customer could not confirm the ${label} quotation`);
+  expect(confirmed.body.data.status === "CONFIRMED", `${label} quotation was not confirmed`);
+  return confirmed.body.data;
 }
 
 async function main() {
   expect(process.env.DATABASE_URL, "DATABASE_URL is required");
-  const [token, adminToken] = await Promise.all([
+  const [token, adminToken, customerToken] = await Promise.all([
     login("rep@dealflow360.test", process.env.SEED_REP_PASSWORD || "Rep12345!"),
     login("admin@dealflow360.test", process.env.SEED_ADMIN_PASSWORD || "Admin123!"),
+    request("/api/customer-auth/login", {
+      method: "POST",
+      body: JSON.stringify({
+        email: "customer.a@dealflow360.test",
+        password: process.env.SEED_CUSTOMER_PASSWORD || "Customer123!",
+      }),
+    }).then((response) => {
+      expect(response.status === 200, "Customer login failed");
+      return response.body.token;
+    }),
   ]);
   const headers = { authorization: `Bearer ${token}` };
   const centralId = "00000000-0000-4000-8000-000000000201";
@@ -82,7 +106,7 @@ async function main() {
     }),
   ]);
 
-  const quotation = await createApprovedQuotation(token, product.id, 30, "MVP3 split");
+  const quotation = await createConfirmedQuotation(token, customerToken, product.id, 30, "MVP3 split");
   const suggestion = await request(`/api/quotations/${quotation.id}/fulfillment/suggest`, { headers });
   expect(suggestion.status === 200, "Fulfillment suggestion failed");
   expect(suggestion.body.data.length === 2, "Suggestion did not split across two warehouses");
@@ -112,7 +136,7 @@ async function main() {
     "Confirmed fulfillment did not decrement stock by 30",
   );
 
-  const overAllocated = await createApprovedQuotation(token, product.id, 2, "MVP3 over-allocation");
+  const overAllocated = await createConfirmedQuotation(token, customerToken, product.id, 2, "MVP3 over-allocation");
   const overAllocationResponse = await request(
     `/api/quotations/${overAllocated.id}/fulfillment/confirm`,
     {
@@ -127,7 +151,7 @@ async function main() {
     "Ordered-quantity over-allocation was not rejected",
   );
 
-  const insufficient = await createApprovedQuotation(token, product.id, 15, "MVP3 stock conflict");
+  const insufficient = await createConfirmedQuotation(token, customerToken, product.id, 15, "MVP3 stock conflict");
   const insufficientResponse = await request(`/api/quotations/${insufficient.id}/fulfillment/confirm`, {
     method: "POST",
     headers,
@@ -138,7 +162,7 @@ async function main() {
     "Current-stock over-allocation was not rejected",
   );
 
-  const backordered = await createApprovedQuotation(token, product.id, 20, "MVP3 backorder");
+  const backordered = await createConfirmedQuotation(token, customerToken, product.id, 20, "MVP3 backorder");
   const backorderSuggestion = await request(
     `/api/quotations/${backordered.id}/fulfillment/suggest`,
     { headers },

@@ -31,6 +31,7 @@ export default function BillingPage() {
 
   const data = billing.data
   const generated = hasGeneratedBilling(data)
+  const billingEligible = ['CONFIRMED', 'FULFILLED'].includes(data.status)
   const actionError = [generate, quantity, cancellation, payment].find(item => item.isError)?.error
   const resetFeedback = () => {
     setNotice('')
@@ -90,14 +91,14 @@ export default function BillingPage() {
     <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
       <div className="flex flex-wrap items-start justify-between gap-4 p-5 sm:p-6">
         <div><p className="text-[10px] font-semibold tracking-widest text-violet-600">HYBRID BILLING</p><h2 className="mt-2 font-display text-xl font-bold">{shortId(data.quotationId)}</h2><p className="mt-1 text-sm text-slate-500">{data.customerName}</p></div>
-        <div className="flex flex-col items-end gap-3"><StatusBadge value={data.status} />{!generated && data.status === 'APPROVED' && <button disabled={generate.isPending} onClick={generateBilling} className="flex items-center gap-2 rounded-lg bg-violet-600 px-4 py-2.5 text-xs font-semibold text-white shadow-lg shadow-violet-600/20 hover:bg-violet-700 disabled:opacity-50"><Icon name="receipt" size={16} />{generate.isPending ? 'Generating…' : 'Generate Billing'}</button>}</div>
+        <div className="flex flex-col items-end gap-3"><StatusBadge value={data.status} />{!generated && billingEligible && <button disabled={generate.isPending} onClick={generateBilling} className="flex items-center gap-2 rounded-lg bg-violet-600 px-4 py-2.5 text-xs font-semibold text-white shadow-lg shadow-violet-600/20 hover:bg-violet-700 disabled:opacity-50"><Icon name="receipt" size={16} />{generate.isPending ? 'Generating…' : 'Generate Billing'}</button>}</div>
       </div>
       <div className="border-t border-slate-100 bg-slate-50/60 px-5 py-3 text-[10px] text-slate-500">One-time and recurring charges are separated by the server. All adjustments shown here are persisted immediately.</div>
     </section>
 
     {notice && <p role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-xs text-emerald-800">{notice}</p>}
     {actionError && <p role="alert" className="rounded-xl border border-red-200 bg-red-50 p-4 text-xs text-red-700">{billingErrorMessage(actionError)}</p>}
-    {!generated && <p className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-xs text-amber-800">{data.status === 'APPROVED' ? 'This quotation has billable lines but no invoice or recurring schedule yet. Generate billing to create both sections.' : 'Billing was not generated before this quotation left the approved state.'}</p>}
+    {!generated && <p className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-xs text-amber-800">{billingEligible ? 'This confirmed quotation has billable lines but no invoice or recurring schedule yet. Generate billing to create both sections.' : 'Billing becomes available only after the customer confirms the quotation and any resulting approvals are completed.'}</p>}
 
     <div className="grid items-start gap-5 2xl:grid-cols-2">
       <OneTimeBillingSection

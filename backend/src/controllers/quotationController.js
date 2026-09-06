@@ -402,7 +402,7 @@ async function suggestFulfillment(req, res) {
   if (!canManage(req.user, quotation)) {
     throw new ApiError(403, "FORBIDDEN", "You cannot fulfill another rep's quotation");
   }
-  assertApprovedForFulfillment(quotation);
+  assertConfirmedForFulfillment(quotation);
 
   const productIds = quotation.lines.map((line) => line.productId);
   const stockLevels = await prisma.stockLevel.findMany({
@@ -431,10 +431,10 @@ async function confirmFulfillment(req, res) {
     if (!canManage(req.user, quotation)) {
       throw new ApiError(403, "FORBIDDEN", "You cannot fulfill another rep's quotation");
     }
-    assertApprovedForFulfillment(quotation);
+    assertConfirmedForFulfillment(quotation);
 
     const claimed = await tx.quotation.updateMany({
-      where: { id: quotation.id, status: "APPROVED" },
+      where: { id: quotation.id, status: "CONFIRMED" },
       data: { status: "FULFILLED" },
     });
     if (claimed.count !== 1) {
@@ -547,12 +547,12 @@ async function checkFulfillmentBackorder(req, res) {
   });
 }
 
-function assertApprovedForFulfillment(quotation) {
-  if (quotation.status !== "APPROVED") {
+function assertConfirmedForFulfillment(quotation) {
+  if (quotation.status !== "CONFIRMED") {
     throw new ApiError(
       409,
       "INVALID_QUOTATION_STATUS",
-      "Only an approved quotation can be fulfilled",
+      "Only a customer-confirmed quotation can be fulfilled",
     );
   }
 }

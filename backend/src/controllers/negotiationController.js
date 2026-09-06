@@ -296,7 +296,8 @@ async function confirmCustomerRequest(req, res) {
       throw new ApiError(400, "EMPTY_QUOTATION", "The quotation has no lines to confirm");
     }
 
-    const { totals, blendedRiskScore, status } = await evaluateGovernance(quotation.lines, tx);
+    const { totals, blendedRiskScore, status: governanceStatus } = await evaluateGovernance(quotation.lines, tx);
+    const status = governanceStatus === "APPROVED" ? "CONFIRMED" : governanceStatus;
     const approvalRound = quotation.approvalRound + 1;
     for (const line of quotation.lines) {
       await tx.quotationLine.update({
@@ -319,7 +320,7 @@ async function confirmCustomerRequest(req, res) {
         approvalRound,
       },
     }];
-    if (status !== "APPROVED") {
+    if (governanceStatus !== "APPROVED") {
       events.push({
         quotationId,
         actorType: "CUSTOMER",

@@ -31,6 +31,15 @@ async function main() {
   });
   expect(login.status === 200, "Rep login failed");
   const headers = { authorization: `Bearer ${login.body.token}` };
+  const customerLogin = await request("/api/customer-auth/login", {
+    method: "POST",
+    body: JSON.stringify({
+      email: "customer.a@dealflow360.test",
+      password: process.env.SEED_CUSTOMER_PASSWORD || "Customer123!",
+    }),
+  });
+  expect(customerLogin.status === 200, "Customer login failed");
+  const customerHeaders = { authorization: `Bearer ${customerLogin.body.token}` };
 
   const [oneTimeProduct, recurringProduct] = await Promise.all([
     prisma.product.findFirst({ where: { billingType: "ONE_TIME", category: "HARDWARE" } }),
@@ -66,6 +75,27 @@ async function main() {
     headers,
   });
   expect(approved.status === 200 && approved.body.data.status === "APPROVED", "Quote was not approved");
+
+  const prematureBilling = await request(`/api/quotations/${quotationId}/billing/generate`, {
+    method: "POST",
+    headers,
+  });
+  expect(
+    prematureBilling.status === 409 && prematureBilling.body.error.code === "INVALID_QUOTATION_STATUS",
+    "Billing was generated before customer confirmation",
+  );
+  const sent = await request(`/api/quotations/${quotationId}/send-to-customer`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({}),
+  });
+  expect(sent.status === 200 && sent.body.data.status === "SENT_TO_CUSTOMER", "Quote was not sent to the customer");
+  const confirmed = await request(`/api/portal/quotations/${quotationId}/confirm`, {
+    method: "POST",
+    headers: customerHeaders,
+    body: JSON.stringify({}),
+  });
+  expect(confirmed.status === 200 && confirmed.body.data.status === "CONFIRMED", "Customer confirmation did not finalize the quote");
 
   const generated = await request(`/api/quotations/${quotationId}/billing/generate`, {
     method: "POST",

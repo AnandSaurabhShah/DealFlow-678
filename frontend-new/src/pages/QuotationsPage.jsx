@@ -20,8 +20,11 @@ export default function QuotationsPage({ fulfillmentOnly = false, billingOnly = 
   const user = useAuthStore(state => state.user)
   const navigate = useNavigate()
   const workflowOnly = fulfillmentOnly || billingOnly
-  const availableFilters = workflowOnly ? ['ALL', 'APPROVED', 'FULFILLED'] : filters
-  const status = filter === 'ALL' ? workflowOnly ? 'APPROVED,FULFILLED' : undefined : filter
+  const availableFilters = billingOnly
+    ? ['ALL', 'CONFIRMED', 'FULFILLED']
+    : fulfillmentOnly ? ['ALL', 'CONFIRMED', 'FULFILLED'] : filters
+  const workflowStatuses = 'CONFIRMED,FULFILLED'
+  const status = filter === 'ALL' ? workflowOnly ? workflowStatuses : undefined : filter
   const quotations = useQuotations({ page, pageSize, status, search: debouncedSearch })
   const visible = quotations.data?.items || []
   const pagination = quotations.data?.pagination
@@ -35,8 +38,8 @@ export default function QuotationsPage({ fulfillmentOnly = false, billingOnly = 
   }
 
   return <section className="min-h-[500px] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-    {fulfillmentOnly && <div className="border-b border-slate-100 px-5 py-4"><p className="text-[10px] font-semibold tracking-widest text-violet-600">FULFILLMENT WORKSPACE</p><h2 className="mt-1 font-display text-base font-bold">Ready and completed quotations</h2><p className="mt-1 text-xs text-slate-500">Open an approved quotation to plan fulfillment, or review a completed allocation.</p></div>}
-    {billingOnly && <div className="border-b border-slate-100 px-5 py-4"><p className="text-[10px] font-semibold tracking-widest text-violet-600">BILLING WORKSPACE</p><h2 className="mt-1 font-display text-base font-bold">Approved and fulfilled quotations</h2><p className="mt-1 text-xs text-slate-500">Open a quotation to generate or review its separated one-time and recurring billing.</p></div>}
+    {fulfillmentOnly && <div className="border-b border-slate-100 px-5 py-4"><p className="text-[10px] font-semibold tracking-widest text-violet-600">FULFILLMENT WORKSPACE</p><h2 className="mt-1 font-display text-base font-bold">Ready and completed quotations</h2><p className="mt-1 text-xs text-slate-500">Open a customer-confirmed quotation to plan fulfillment, or review a completed allocation.</p></div>}
+    {billingOnly && <div className="border-b border-slate-100 px-5 py-4"><p className="text-[10px] font-semibold tracking-widest text-violet-600">BILLING WORKSPACE</p><h2 className="mt-1 font-display text-base font-bold">Confirmed and fulfilled quotations</h2><p className="mt-1 text-xs text-slate-500">Open a quotation to generate or review its separated one-time and recurring billing.</p></div>}
     <div className="flex flex-wrap items-center justify-between gap-3 p-4">
       <div className="flex max-w-full min-w-0 gap-1 overflow-x-auto">{availableFilters.map(item => <button key={item} onClick={() => { setFilter(item); setPage(1) }} className={`shrink-0 rounded-lg px-3 py-2 text-[11px] ${filter === item ? 'bg-violet-100 font-semibold text-violet-700' : 'text-slate-500 hover:bg-slate-50'}`}>{item === 'ALL' && workflowOnly ? billingOnly ? 'All billing' : 'All fulfillment' : filterLabels[item]}{filter === item && pagination && <span className="ml-1.5 rounded-full bg-white px-1.5 py-0.5 text-[9px]">{pagination.total}</span>}</button>)}</div>
       <button onClick={() => quotations.refetch()} disabled={quotations.isFetching} className="rounded-lg border border-slate-200 px-3 py-2 text-[11px] font-semibold disabled:opacity-50">{quotations.isFetching ? 'Refreshing…' : 'Refresh'}</button>

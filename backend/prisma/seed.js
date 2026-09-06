@@ -318,21 +318,21 @@ async function main() {
     {
       id: "00000000-0000-4000-8000-000000000401",
       customerName: "MVP3 Single Warehouse Demo",
-      status: "APPROVED",
+      status: "CONFIRMED",
       lines: [{ product: laptop, qty: 10, discountPercent: "0.00" }],
       splits: [],
     },
     {
       id: "00000000-0000-4000-8000-000000000402",
       customerName: "MVP3 Two Warehouse Split Demo",
-      status: "APPROVED",
+      status: "CONFIRMED",
       lines: [{ product: laptop, qty: 30, discountPercent: "0.00" }],
       splits: [],
     },
     {
       id: "00000000-0000-4000-8000-000000000403",
       customerName: "MVP3 Insufficient Stock Demo",
-      status: "APPROVED",
+      status: "CONFIRMED",
       lines: [{ product: laptop, qty: 50, discountPercent: "0.00" }],
       splits: [],
     },
@@ -363,7 +363,7 @@ async function main() {
     {
       id: "00000000-0000-4000-8000-000000000501",
       customerName: "MVP4 Ready to Generate Billing",
-      status: "APPROVED",
+      status: "CONFIRMED",
       lines: [
         {
           id: "00000000-0000-4000-8000-000000000511",
@@ -385,7 +385,7 @@ async function main() {
     {
       id: "00000000-0000-4000-8000-000000000502",
       customerName: "MVP4 Active Hybrid Billing",
-      status: "APPROVED",
+      status: "CONFIRMED",
       lines: [
         {
           id: "00000000-0000-4000-8000-000000000513",
@@ -1150,7 +1150,7 @@ function finalLoadIds(range) {
 }
 
 function finalLoadStatus(index) {
-  if (index <= 25) return "APPROVED";
+  if (index <= 25) return "CONFIRMED";
   if (index <= 50) return "SENT_TO_CUSTOMER";
   if (index <= 75) return "UNDER_NEGOTIATION";
   if (index <= 90) return "PENDING_MANAGER_APPROVAL";

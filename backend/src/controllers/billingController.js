@@ -13,7 +13,7 @@ const {
 } = require("../services/quotationCalculator");
 const { shapeBillingResponse } = require("../services/billingPresenter");
 
-const adjustableStatuses = new Set(["APPROVED", "FULFILLED"]);
+const billableStatuses = new Set(["CONFIRMED", "FULFILLED"]);
 
 const billingInclude = {
   lines: {
@@ -44,11 +44,11 @@ function assertCanManage(user, quotation) {
 }
 
 function assertBillingAdjustable(quotation) {
-  if (!adjustableStatuses.has(quotation.status)) {
+  if (!billableStatuses.has(quotation.status)) {
     throw new ApiError(
       409,
       "INVALID_QUOTATION_STATUS",
-      "Billing can only be changed for an approved or fulfilled quotation",
+      "Billing can only be changed after customer confirmation",
     );
   }
 }
@@ -78,11 +78,11 @@ async function generateQuotationBilling(req, res) {
       },
     });
     assertCanManage(req.user, quotation);
-    if (quotation.status !== "APPROVED") {
+    if (!billableStatuses.has(quotation.status)) {
       throw new ApiError(
         409,
         "INVALID_QUOTATION_STATUS",
-        "Billing must be generated after approval and before fulfillment",
+        "Billing can only be generated after the customer confirms the quotation",
       );
     }
     if (
@@ -294,9 +294,10 @@ async function cancelRecurringLine(req, res) {
 async function payInvoice(req, res) {
   const invoice = await prisma.invoice.findUniqueOrThrow({
     where: { id: req.params.id },
-    include: { quotation: { select: { repId: true } } },
+    include: { quotation: { select: { repId: true, status: true } } },
   });
   assertCanManage(req.user, invoice.quotation);
+  assertBillingAdjustable(invoice.quotation);
 
   const paid = await prisma.invoice.update({
     where: { id: invoice.id },

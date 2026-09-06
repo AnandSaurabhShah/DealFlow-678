@@ -18,7 +18,7 @@ export default function FulfillmentPage() {
   const quotation = useQuotation(quotationId)
   const quote = quotation.data
   const canManage = user.role === 'ADMIN' || (user.role === 'REP' && quote?.repId === user.id)
-  const suggestion = useFulfillmentSuggestion(quotationId, canManage && quote?.status === 'APPROVED')
+  const suggestion = useFulfillmentSuggestion(quotationId, canManage && quote?.status === 'CONFIRMED')
   const [backorderRequested, setBackorderRequested] = useState(false)
   const backorder = useFulfillmentBackorder(quotationId, backorderRequested && quote?.status === 'FULFILLED')
   const confirmFulfillment = useConfirmFulfillment()
@@ -116,7 +116,7 @@ export default function FulfillmentPage() {
 
   const conflictCode = confirmFulfillment.error?.response?.data?.error?.code
   const isFulfilled = quote.status === 'FULFILLED'
-  const isEligible = quote.status === 'APPROVED'
+  const isEligible = quote.status === 'CONFIRMED'
 
   return <div className="space-y-5">
     <button onClick={() => navigate('/quotations')} className="flex items-center gap-1.5 text-xs font-semibold text-slate-500 hover:text-slate-900"><Icon name="back" size={15} />Back to quotations</button>
@@ -133,7 +133,7 @@ export default function FulfillmentPage() {
     {notice && <p role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-xs text-emerald-800">{notice}</p>}
 
     {!canManage && <StatePanel icon="alert" title="Fulfillment unavailable" message="You don't have permission to fulfill this quotation." error />}
-    {canManage && !isEligible && !isFulfilled && <StatePanel icon="alert" title="Quotation not eligible" message="Only an approved quotation can be planned for fulfillment." />}
+    {canManage && !isEligible && !isFulfilled && <StatePanel icon="alert" title="Quotation not eligible" message="Only a customer-confirmed quotation can be planned for fulfillment." />}
 
     {canManage && isEligible && <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
       <div className="flex flex-wrap items-start justify-between gap-3">

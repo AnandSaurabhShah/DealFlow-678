@@ -38,6 +38,16 @@ test("moderate risk becomes approved after manager approval", () => {
   assert.equal(getStatusAfterApproval(quotation, "MANAGER"), "APPROVED");
 });
 
+test("final approval after customer acceptance confirms the quotation", () => {
+  const quotation = {
+    status: "PENDING_MANAGER_APPROVAL",
+    blendedRiskScore: new Prisma.Decimal(8),
+    sentToCustomerAt: new Date(),
+    approvalLogs: [],
+  };
+  assert.equal(getStatusAfterApproval(quotation, "MANAGER"), "CONFIRMED");
+});
+
 test("does not reuse a manager approval from an earlier approval round", () => {
   const quotation = {
     status: "PENDING_FINANCE_APPROVAL",

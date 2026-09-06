@@ -13,7 +13,7 @@ The seed provides these deterministic frontend scenarios:
 
 | Quotation | ID | Intended test |
 | --- | --- | --- |
-| MVP4 Ready to Generate Billing | `00000000-0000-4000-8000-000000000501` | Mixed one-time and recurring lines with no billing records. Use the Generate Billing action. |
+| MVP4 Ready to Generate Billing | `00000000-0000-4000-8000-000000000501` | Customer-confirmed mixed one-time and recurring lines with no billing records. Use the Generate Billing action. |
 | MVP4 Active Hybrid Billing | `00000000-0000-4000-8000-000000000502` | Unpaid one-time invoice, four monthly entries, and an existing quantity-reduction credit. Test quantity changes, cancellation, and payment. |
 | MVP4 Cancelled Subscription | `00000000-0000-4000-8000-000000000503` | Paid one-time invoice, one billed recurring cycle, three cancelled cycles, and a cancellation credit note. |
 
